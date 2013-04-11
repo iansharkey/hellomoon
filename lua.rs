@@ -1,6 +1,7 @@
 //use core::to_str::*;
 use core::hashmap::linear;
 use core::ops::*;
+//use core::vec::grow;
 //use core::str::*;
 
 enum LuaVal {
@@ -52,16 +53,30 @@ impl Ord for LuaVal {
  }
 
  fn le(&self, other: &LuaVal) -> bool {
-  return true;
+  match (self, other) {
+   (&LNum(x), &LNum(y)) => { x<=y },
+   (&LString(x), &LString(y)) => { *x < *y },
+   _ => { false }
+  }
  }
 
 
  fn ge(&self, other: &LuaVal) -> bool {
-  return true;
+  match (self, other) {
+   (&LNum(x), &LNum(y)) => { x>=y },
+   (&LString(x), &LString(y)) => { *x < *y },
+   _ => { false }
+  }
+
  }
 
  fn gt(&self, other: &LuaVal) -> bool {
-  return true;
+  match (self, other) {
+   (&LNum(x), &LNum(y)) => { x>y },
+   (&LString(x), &LString(y)) => { *x < *y },
+   _ => { false }
+  }
+
  }
  
 }
@@ -90,6 +105,7 @@ enum Instr {
  ILoadK(int, int),
  IReturn(int),
  ICall(int, int, int), 
+ ILoadNil(uint, uint),
 }
 
 struct Program(~[Instr]);
@@ -120,44 +136,44 @@ fn step( instr: Instr, pc: &mut int, registers: @mut [LuaVal], constants: @[LuaV
  let bump = || { jump(1); };
  let reg_l = |r: int| { if r<0 { copy(constants[-r - 1]) } else { copy(registers[r]) } } ;
  let reg = registers;
+ bump();
   match instr {
-    IAdd(dst, r1, r2) => { reg[dst] = reg_l(r1) + reg_l(r2); bump();  },
-    ISub(dst, r1, r2) => { reg[dst] = reg_l(r1) - reg_l(r2); bump();  },
-    IMul(dst, r1, r2) => { reg[dst] = reg_l(r1) * reg_l(r2); bump();  },
+    IAdd(dst, r1, r2) => { reg[dst] = reg_l(r1) + reg_l(r2);  },
+    ISub(dst, r1, r2) => { reg[dst] = reg_l(r1) - reg_l(r2);  },
+    IMul(dst, r1, r2) => { reg[dst] = reg_l(r1) * reg_l(r2);  },
     IConcat(dst, r1, r2) => { reg[dst] = reg_l(r1) + reg_l(r2); },
-    IJmp(offset) => { jump(offset); },
-    ILt(r1, r2) => { bump(); if reg_l(r1) < reg_l(r2) { bump(); } },
-    IMove(r1, r2) => { registers[r1] = copy(reg_l(r2)); bump(); },
-    ILoadK(dst, src) => { reg[dst] = copy(constants[src]); bump(); },
-    ICall(func, in_extent, out_extent) => { 
+    IJmp(offset) => { jump(offset - 1); },
+    ILt(r1, r2) => { if reg_l(r1) < reg_l(r2) { bump(); } },
+    IMove(r1, r2) => { registers[r1] = copy(reg_l(r2)); },
+    ILoadK(dst, src) => { reg[dst] = copy(constants[src]); },
+    ILoadNil(start, end) => { for uint::range(start, end) |i| { reg[i] = LNil; }; }
+    ICall(func, _, _) => { 
       match reg_l(func) {
-       LFunc(subexec) => { reg[in_extent] = run( subexec, registers );  bump(); },
-       _ => fail!(~"tst"), 
+       LFunc(subexec) => { reg[func] = run( subexec, registers ); },
+       _ => fail!(~"Tried to call a non-function!"), 
       }
-
-
     },
-    IReturn(dst) => { /* can't get here */ },
+    IReturn(_) => { /* can't get here */ },
+
   }
 }
 
 fn main() {
 
- let registers = @mut [LNum(0.0f), LNum(3.0f), LNum(1.0f), LNum(2.0f)];
+   // let registers = @mut [LNum(0.0f), LNum(3.0f), LNum(1.0f), LNum(2.0f)];
 
  let subprog = Execution { state: @mut true, constants: @[LNum(70f)], prog: Program(~[
   IReturn(-1)
  ]) };
 
  let s = ~Execution { state: @mut true, constants: @[LNum(500f), LNum(300f), LFunc(@subprog)], prog: Program(~[
-     ICall(-3, 1, 0),
+     ILoadK(1, 2),
+     ICall(1, 0, 0),
      IAdd(3,1,-2), 
      ISub(3,3,2),
      IReturn(3),
     ]) };
 
-
- 
  let out = run(s, @mut [LNum(0f), LNum(0f),LNum(1f),LNum(0f), ] );
  io::println( out.to_str() );
 
