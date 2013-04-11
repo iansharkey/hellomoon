@@ -143,13 +143,12 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal] 
     IConcat(dst, r1, r2) => { reg[dst] = reg_l(r1) + reg_l(r2); },
     IJmp(offset) => { jump(offset - 1); },
     ILt(r1, r2) => { if reg_l(r1) < reg_l(r2) { bump(); } },
-    IMove(r1, r2) => { reg[r1] = copy(reg_l(r2)); },
+    IMove(r1, r2) => { reg[r1] = reg_l(r2); },
     ILoadK(dst, src) => { reg[dst] = copy(constants[src]); },
     ILoadNil(start, end) => { grow(reg, end, &LNil); for uint::range(start, end) |i| { reg[i] = LNil; }; }
     ICall(func, _, _) => { 
       match reg_l(func) {
-      
-       LFunc(subexec) => { let mut reg_prime = ~[]; reg[func] = run( subexec,  &mut reg_prime ); },
+        LFunc(subexec) => { let mut reg_prime = ~[]; reg[func] = run( subexec,  &mut reg_prime ); },
        _ => fail!(~"Tried to call a non-function!"), 
       }
     },
