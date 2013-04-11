@@ -112,7 +112,7 @@ struct Program(~[Instr]);
 
 struct Execution {
   state: @mut bool,
-  constants: @[LuaVal],
+  constants: ~[LuaVal],
   prog: Program,
 }
 
@@ -123,13 +123,13 @@ fn run( execution: &Execution, regs: &mut ~[LuaVal] ) -> LuaVal {
  let reg_l = |r: int| { if r<0 { copy(execution.constants[-r - 1]) } else { copy(regs[r]) } } ;  
  loop {
    match execution.prog[pc] {
-    IReturn(src) => { return copy(reg_l(src)); },
-    _ => { step(execution.prog[pc], &mut pc, regs, execution.constants); }
+    IReturn(src) => { return reg_l(src); },
+    _ => { step(execution.prog[pc], &mut pc, regs, &execution.constants); }
   }
  }
 }
 
-fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: @[LuaVal] ) {
+fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal] ) {
 
  let jump = |n| { *pc+=n };
  let bump = || { jump(1); };
@@ -148,7 +148,8 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: @[LuaVal] )
     ILoadNil(start, end) => { grow(reg, end, &LNil); for uint::range(start, end) |i| { reg[i] = LNil; }; }
     ICall(func, _, _) => { 
       match reg_l(func) {
-       LFunc(subexec) => { reg[func] = run( subexec, reg ); },
+      
+       LFunc(subexec) => { let mut reg_prime = ~[]; reg[func] = run( subexec,  &mut reg_prime ); },
        _ => fail!(~"Tried to call a non-function!"), 
       }
     },
@@ -161,11 +162,12 @@ fn main() {
 
    // let registers = @mut [LNum(0.0f), LNum(3.0f), LNum(1.0f), LNum(2.0f)];
 
- let subprog = Execution { state: @mut true, constants: @[LNum(70f)], prog: Program(~[
+ let subprog = Execution { state: @mut true, constants: ~[LNum(70f)], prog: Program(~[
+  ILoadNil(0, 55),
   IReturn(-1)
  ]) };
 
- let s = ~Execution { state: @mut true, constants: @[LNum(500f), LNum(300f), LFunc(@subprog)], prog: Program(~[
+ let s = ~Execution { state: @mut true, constants: ~[LNum(500f), LNum(300f), LFunc(@subprog)], prog: Program(~[
      ILoadK(1, 2),
      ICall(1, 0, 0),
      IAdd(3,1,-2), 
