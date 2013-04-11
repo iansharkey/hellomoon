@@ -8,6 +8,7 @@ enum LuaVal {
  LNum(float),
  LBool(bool),
  LTable(~linear::LinearMap<~LuaVal, ~LuaVal>),
+ LFunc(@Execution),
  LNil,
 }
 
@@ -88,55 +89,76 @@ enum Instr {
  IMove(int, int),
  ILoadK(int, int),
  IReturn(int),
+ ICall(int, int, int), 
 }
 
 struct Program(~[Instr]);
 
 struct Execution {
   state: @mut bool,
-  retval: @mut LuaVal,
   constants: @[LuaVal],
   prog: Program,
-  pc: @mut int,
-  registers: @mut [LuaVal]
 }
 
 
-fn step( execution : &Execution ) {
+fn run( execution: &Execution, regs: @mut [LuaVal] ) -> LuaVal {
+ let mut pc = 0;
+ let registers = copy(regs);
 
- let jump = |n| { *execution.pc+=n };
+ let reg_l = |r: int| { if r<0 { copy(execution.constants[-r - 1]) } else { copy(regs[r]) } } ;  
+ loop {
+   match execution.prog[pc] {
+    IReturn(src) => { return copy(reg_l(src)); },
+    _ => { step(execution.prog[pc], &mut pc, registers, execution.constants); }
+  }
+ }
+}
+
+fn step( instr: Instr, pc: &mut int, registers: @mut [LuaVal], constants: @[LuaVal] ) {
+
+ let jump = |n| { *pc+=n };
  let bump = || { jump(1); };
- let reg_l = |r: int| { if r<0 { copy(execution.constants[-r - 1]) } else { copy(execution.registers[r]) } } ;
- let reg = execution.registers;
-  match execution.prog[*execution.pc] {
+ let reg_l = |r: int| { if r<0 { copy(constants[-r - 1]) } else { copy(registers[r]) } } ;
+ let reg = registers;
+  match instr {
     IAdd(dst, r1, r2) => { reg[dst] = reg_l(r1) + reg_l(r2); bump();  },
     ISub(dst, r1, r2) => { reg[dst] = reg_l(r1) - reg_l(r2); bump();  },
     IMul(dst, r1, r2) => { reg[dst] = reg_l(r1) * reg_l(r2); bump();  },
     IConcat(dst, r1, r2) => { reg[dst] = reg_l(r1) + reg_l(r2); },
     IJmp(offset) => { jump(offset); },
     ILt(r1, r2) => { bump(); if reg_l(r1) < reg_l(r2) { bump(); } },
-    IMove(r1, r2) => { execution.registers[r1] = copy(reg_l(r2)); bump(); },
-    ILoadK(dst, src) => { reg[dst] = copy(execution.constants[src]); bump(); },
-    IReturn(src) => { *execution.state = false; *execution.retval = reg_l(src); },
+    IMove(r1, r2) => { registers[r1] = copy(reg_l(r2)); bump(); },
+    ILoadK(dst, src) => { reg[dst] = copy(constants[src]); bump(); },
+    ICall(func, in_extent, out_extent) => { 
+      match reg_l(func) {
+       LFunc(subexec) => { reg[in_extent] = run( subexec, registers );  bump(); },
+       _ => fail!(~"tst"), 
+      }
+
+
+    },
+    IReturn(dst) => { /* can't get here */ },
   }
 }
 
 fn main() {
 
  let registers = @mut [LNum(0.0f), LNum(3.0f), LNum(1.0f), LNum(2.0f)];
- let s = ~Execution { state: @mut true, retval: @mut LNil, constants: @[LNum(500f), LNum(300f)], prog: Program(~[
-     ILoadK(1, 0),
+
+ let subprog = Execution { state: @mut true, constants: @[LNum(70f)], prog: Program(~[
+  IReturn(-1)
+ ]) };
+
+ let s = ~Execution { state: @mut true, constants: @[LNum(500f), LNum(300f), LFunc(@subprog)], prog: Program(~[
+     ICall(-3, 1, 0),
      IAdd(3,1,-2), 
      ISub(3,3,2),
      IReturn(3),
-    ]), pc: @mut 0, registers: registers };
+    ]) };
 
 
- while *s.state {
-   step(s);
- }
  
- let out = s.retval;
+ let out = run(s, @mut [LNum(0f), LNum(0f),LNum(1f),LNum(0f), ] );
  io::println( out.to_str() );
 
 
