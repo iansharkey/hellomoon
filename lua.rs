@@ -1,7 +1,7 @@
 //use core::to_str::*;
 use core::hashmap::linear;
 use core::ops::*;
-//use core::vec::grow;
+use core::vec::grow;
 //use core::str::*;
 
 enum LuaVal {
@@ -117,25 +117,24 @@ struct Execution {
 }
 
 
-fn run( execution: &Execution, regs: @mut [LuaVal] ) -> LuaVal {
+fn run( execution: &Execution, regs: &mut ~[LuaVal] ) -> LuaVal {
  let mut pc = 0;
- let registers = copy(regs);
 
  let reg_l = |r: int| { if r<0 { copy(execution.constants[-r - 1]) } else { copy(regs[r]) } } ;  
  loop {
    match execution.prog[pc] {
     IReturn(src) => { return copy(reg_l(src)); },
-    _ => { step(execution.prog[pc], &mut pc, registers, execution.constants); }
+    _ => { step(execution.prog[pc], &mut pc, regs, execution.constants); }
   }
  }
 }
 
-fn step( instr: Instr, pc: &mut int, registers: @mut [LuaVal], constants: @[LuaVal] ) {
+fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: @[LuaVal] ) {
 
  let jump = |n| { *pc+=n };
  let bump = || { jump(1); };
- let reg_l = |r: int| { if r<0 { copy(constants[-r - 1]) } else { copy(registers[r]) } } ;
- let reg = registers;
+ let reg_l = |r: int| { if r<0 { copy(constants[-r - 1]) } else { copy(reg[r]) } } ;
+
  bump();
   match instr {
     IAdd(dst, r1, r2) => { reg[dst] = reg_l(r1) + reg_l(r2);  },
@@ -144,12 +143,12 @@ fn step( instr: Instr, pc: &mut int, registers: @mut [LuaVal], constants: @[LuaV
     IConcat(dst, r1, r2) => { reg[dst] = reg_l(r1) + reg_l(r2); },
     IJmp(offset) => { jump(offset - 1); },
     ILt(r1, r2) => { if reg_l(r1) < reg_l(r2) { bump(); } },
-    IMove(r1, r2) => { registers[r1] = copy(reg_l(r2)); },
+    IMove(r1, r2) => { reg[r1] = copy(reg_l(r2)); },
     ILoadK(dst, src) => { reg[dst] = copy(constants[src]); },
-    ILoadNil(start, end) => { for uint::range(start, end) |i| { reg[i] = LNil; }; }
+    ILoadNil(start, end) => { grow(reg, end, &LNil); for uint::range(start, end) |i| { reg[i] = LNil; }; }
     ICall(func, _, _) => { 
       match reg_l(func) {
-       LFunc(subexec) => { reg[func] = run( subexec, registers ); },
+       LFunc(subexec) => { reg[func] = run( subexec, reg ); },
        _ => fail!(~"Tried to call a non-function!"), 
       }
     },
@@ -174,7 +173,8 @@ fn main() {
      IReturn(3),
     ]) };
 
- let out = run(s, @mut [LNum(0f), LNum(0f),LNum(1f),LNum(0f), ] );
+ let mut regs = ~[LNum(0f), LNum(0f),LNum(1f),LNum(0f), ];
+ let out = run(s, &mut regs );
  io::println( out.to_str() );
 
 
