@@ -183,8 +183,14 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal] 
     ILt(r1, r2) => { if reg_l(r1) < reg_l(r2) { bump(); } },
 
     IForPrep(index, offset) => { reg[index] = reg[index] - reg[index+2]; jump(offset); },
-    IForLoop(index, offset) => { reg[index] = reg[index] + reg[index+2]; 
-    		    	       	 if reg[index] <= copy(reg[index+1]) { jump(offset); reg[index+3] = copy(reg[index]); }
+    IForLoop(index, offset) => { reg[index] = reg[index] + reg[index+2];
+    		    	         let action = ||  { jump(offset); reg[index+3] = copy(reg[index]); };
+    		    	         if reg[index+2] > LNum(0f) { 
+				   if reg[index] <= copy(reg[index+1]) { action(); }
+				 }
+				 else {
+				   if reg[index] >= copy(reg[index+1]) { action(); }
+				 }
 			       }
     
 
