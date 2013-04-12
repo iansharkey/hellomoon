@@ -19,6 +19,8 @@ enum Instr {
  ICall(int, int, int), 
  ILoadNil(uint, uint),
  IGetTable(int, int, int),
+ IForPrep(int, int),
+ IForLoop(int, int),
 }
 
 #[deriving(Eq)]
@@ -180,6 +182,12 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal] 
     IJmp(offset) => { jump(offset - 1); },
     ILt(r1, r2) => { if reg_l(r1) < reg_l(r2) { bump(); } },
 
+    IForPrep(index, offset) => { reg[index] = reg[index] - reg[index+2]; jump(offset); },
+    IForLoop(index, offset) => { reg[index] = reg[index] + reg[index+2]; 
+    		    	       	 if reg[index] <= copy(reg[index+1]) { jump(offset); reg[index+3] = copy(reg[index]); }
+			       }
+    
+
     ICall(func, _, _) => { 
       match reg_l(func) {
         LFunc(subexec) => { let mut reg_prime = ~[]; reg[func] = run( subexec,  &mut reg_prime ); },
@@ -216,8 +224,20 @@ fn main() {
      IReturn(3),
     ]) };
 
- let mut regs = ~[LNum(0f), LNum(0f),LNum(1f),LNum(0f), ];
- let out = run(s, &mut regs );
+ let fancy = ~Execution { state: @mut true, constants: ~[LNum(0f), LNum(1f), LNum(100f)], prog: Program(~[
+   ILoadK(0, 0),
+   ILoadK(1, 1),
+   ILoadK(2, 2),
+   ILoadK(3, 1),
+   IForPrep(1, 1),
+   IAdd(0, 4, 0),
+   IForLoop(1, -2),
+   IReturn(0),
+  ]) };
+
+
+ let mut regs = ~[LNum(0f), LNum(0f),LNum(1f),LNum(0f), LNum(0f),];
+ let out = run(fancy, &mut regs );
  io::println( out.to_str() );
 
 
