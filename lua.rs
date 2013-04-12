@@ -3,15 +3,60 @@ use core::hashmap::linear;
 use core::ops::*;
 use core::vec::grow;
 //use core::str::*;
+use core::to_bytes::*;
 
+#[deriving(Eq)]
+enum Instr {
+ IAdd(int, int, int),
+ ISub(int, int, int),
+ IMul(int, int, int),
+ IConcat(int, int, int),
+ IJmp(int),
+ ILt(int, int),
+ IMove(int, int),
+ ILoadK(int, int),
+ IReturn(int),
+ ICall(int, int, int), 
+ ILoadNil(uint, uint),
+ IGetTable(int, int, int),
+}
+
+#[deriving(Eq)]
+struct Program(~[Instr]);
+
+
+#[deriving(Eq)]
+struct Execution {
+  state: @mut bool,
+  constants: ~[LuaVal],
+  prog: Program,
+}
+
+
+
+#[deriving(Eq)]
 enum LuaVal {
  LString(@~str),
  LNum(float),
  LBool(bool),
- LTable(~linear::LinearMap<~LuaVal, ~LuaVal>),
+ LTable(linear::LinearMap<LuaVal, LuaVal>),
  LFunc(@Execution),
  LNil,
 }
+
+
+impl IterBytes for LuaVal {
+  fn iter_bytes(&self, lsb0: bool, f: Cb) {
+    match *self {
+      LString(x) => { x.iter_bytes(lsb0, f); }
+      LNum(x) => { (x as uint).iter_bytes(lsb0, f); }
+      LBool(x) => { x.iter_bytes(lsb0, f); }
+      LNil => { (true, false).iter_bytes(lsb0, f); }
+      _ => { fail!(~"Tried to hash a function!"); }      
+     }
+  }
+}
+
 
 impl Add<LuaVal, LuaVal> for LuaVal {
  fn add(&self, other: &LuaVal) -> LuaVal {
@@ -47,7 +92,7 @@ impl Ord for LuaVal {
  fn lt(&self, other: &LuaVal) -> bool {
   match (self, other) {
    (&LNum(x), &LNum(y)) => { x<y },
-   (&LString(x), &LString(y)) => { *x < *y },
+   (&LString(x), &LString(y)) => { x < y },
    _ => { false }
   }
  }
@@ -94,28 +139,6 @@ impl ToStr for LuaVal {
 }
 
 
-enum Instr {
- IAdd(int, int, int),
- ISub(int, int, int),
- IMul(int, int, int),
- IConcat(int, int, int),
- IJmp(int),
- ILt(int, int),
- IMove(int, int),
- ILoadK(int, int),
- IReturn(int),
- ICall(int, int, int), 
- ILoadNil(uint, uint),
-}
-
-struct Program(~[Instr]);
-
-struct Execution {
-  state: @mut bool,
-  constants: ~[LuaVal],
-  prog: Program,
-}
-
 
 fn run( execution: &Execution, regs: &mut ~[LuaVal] ) -> LuaVal {
  let mut pc = 0;
@@ -141,11 +164,22 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal] 
     ISub(dst, r1, r2) => { reg[dst] = reg_l(r1) - reg_l(r2);  },
     IMul(dst, r1, r2) => { reg[dst] = reg_l(r1) * reg_l(r2);  },
     IConcat(dst, r1, r2) => { reg[dst] = reg_l(r1) + reg_l(r2); },
-    IJmp(offset) => { jump(offset - 1); },
-    ILt(r1, r2) => { if reg_l(r1) < reg_l(r2) { bump(); } },
-    IMove(r1, r2) => { reg[r1] = reg_l(r2); },
+
     ILoadK(dst, src) => { reg[dst] = copy(constants[src]); },
     ILoadNil(start, end) => { grow(reg, end, &LNil); for uint::range(start, end) |i| { reg[i] = LNil; }; }
+    IMove(r1, r2) => { reg[r1] = reg_l(r2); },
+
+    IGetTable(dst, tbl, index) => {
+       match copy(reg[tbl]) {
+         LTable(table) => { reg[dst] = copy(*table.get(&reg_l(index)));  },
+	 _ => { fail!(~"Tried to index a non-table"); },
+
+       }
+    },
+
+    IJmp(offset) => { jump(offset - 1); },
+    ILt(r1, r2) => { if reg_l(r1) < reg_l(r2) { bump(); } },
+
     ICall(func, _, _) => { 
       match reg_l(func) {
         LFunc(subexec) => { let mut reg_prime = ~[]; reg[func] = run( subexec,  &mut reg_prime ); },
@@ -161,9 +195,17 @@ fn main() {
 
    // let registers = @mut [LNum(0.0f), LNum(3.0f), LNum(1.0f), LNum(2.0f)];
 
- let subprog = Execution { state: @mut true, constants: ~[LNum(70f)], prog: Program(~[
+
+ let mut hmap: linear::LinearMap<LuaVal, LuaVal> = linear::LinearMap::new();
+
+ hmap.insert( LString(@~"a"), LNum(56f) );
+
+
+ let subprog = Execution { state: @mut true, constants: ~[LNum(70f), LTable(hmap), LString(@~"a")], prog: Program(~[
   ILoadNil(0, 55),
-  IReturn(-1)
+  ILoadK(1, 1),
+  IGetTable(2, 1, -3),
+  IReturn(2)
  ]) };
 
  let s = ~Execution { state: @mut true, constants: ~[LNum(500f), LNum(300f), LFunc(@subprog)], prog: Program(~[
