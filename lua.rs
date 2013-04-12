@@ -180,7 +180,7 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal] 
     },
 
     IJmp(offset) => { jump(offset - 1); },
-    ILt(r1, r2) => { if reg_l(r1) < reg_l(r2) { bump(); } },
+    ILt(r1, r2) => { if reg_l(r1) < reg_l(r2) {;} else { bump(); } },
 
     IForPrep(index, offset) => { reg[index] = reg[index] - reg[index+2]; jump(offset); },
     IForLoop(index, offset) => { reg[index] = reg[index] + reg[index+2];
