@@ -165,7 +165,7 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal] 
     IAdd(dst, r1, r2) => { reg[dst] = reg_l(r1) + reg_l(r2);  },
     ISub(dst, r1, r2) => { reg[dst] = reg_l(r1) - reg_l(r2);  },
     IMul(dst, r1, r2) => { reg[dst] = reg_l(r1) * reg_l(r2);  },
-    IConcat(dst, r1, r2) => { reg[dst] = reg_l(r1) + reg_l(r2); },
+    IConcat(dst, r1, r2) => { reg[dst] = LString(@(reg_l(r1).to_str() + reg_l(r2).to_str())); },
 
     ILoadK(dst, src) => { reg[dst] = copy(constants[src]); },
     ILoadNil(start, end) => { grow(reg, end, &LNil); for uint::range(start, end) |i| { reg[i] = LNil; }; }
@@ -241,9 +241,19 @@ fn main() {
    IReturn(0),
   ]) };
 
+  let concat = ~Execution { state: @mut true, constants: ~[LNum(55f), LNum(33f), LNum(22f), LNum(66f)], prog: Program(~[
+   ILoadK(0, 0),
+   ILoadK(1, 1),
+   ILoadK(2, 2),
+   IConcat(3, 0, 1),
+   IConcat(3, 3, 1),
+   IConcat(3, 3, -4),
+   IReturn(3),
+  ]) };
+
 
  let mut regs = ~[LNum(0f), LNum(0f),LNum(1f),LNum(0f), LNum(0f),];
- let out = run(fancy, &mut regs );
+ let out = run(concat, &mut regs );
  io::println( out.to_str() );
 
 
