@@ -199,8 +199,8 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal] 
     IMove(r1, r2) => reg[r1] = reg_l(r2),
 
     IGetTable(dst, tbl, index) => 
-       match copy(reg[tbl]) {
-         LTable(table) => reg[dst] = copy(*table.get(&reg_l(index))),
+       match reg[tbl] {
+         LTable(table) => reg[dst] = *table.get(&reg_l(index)),
 	 _ => fail!(~"Tried to index a non-table"),
 
        },
