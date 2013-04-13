@@ -1,9 +1,10 @@
-//use core::to_str::*;
+
 use core::hashmap::linear;
 use core::ops::*;
 use core::vec::grow;
-//use core::str::*;
 use core::to_bytes::*;
+use core::ptr::ref_eq;
+use core::cast::transmute_region;
 
 #[deriving(Eq)]
 enum Instr {
@@ -36,14 +37,40 @@ struct Execution {
 
 
 
-#[deriving(Eq)]
+//#[deriving(Eq)]
 enum LuaVal {
  LString(@~str),
  LNum(float),
  LBool(bool),
- LTable(linear::LinearMap<LuaVal, LuaVal>),
+ LTable(@linear::LinearMap<LuaVal, LuaVal>),
  LFunc(@Execution),
+ LRustFunc(extern "Rust" fn() -> ()),
  LNil,
+}
+
+fn cmp_fn(a: extern "Rust" fn(), b: extern "Rust" fn()) -> bool {
+    unsafe {
+        let a_: *() = cast::transmute(a), b_: *() = cast::transmute(b);
+        a_ == b_
+    }
+}
+
+impl Eq for LuaVal {
+  fn eq(&self, other: &LuaVal) -> bool {
+    match (self, other) {
+      (&LNum(x), &LNum(y)) => x == y,
+      (&LString(x), &LString(y)) => x == y,
+      (&LBool(x), &LBool(y)) => x == y,
+      (&LTable(x), &LTable(y)) => x == y,
+      (&LNil, &LNil) => true,
+      (&LRustFunc(x), &LRustFunc(y)) => { cmp_fn(x, y) }
+      (_, _) => false
+    }
+  }
+
+  fn ne(&self, other: &LuaVal) -> bool {
+    return !(self == other);
+  }
 }
 
 
@@ -193,12 +220,16 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal] 
 
     ICall(func, _, _) =>  match reg_l(func) {
         LFunc(subexec) => { let mut reg_prime = ~[]; reg[func] = run( subexec,  &mut reg_prime ); },
+	LRustFunc(f) => { f(); },
        _ => fail!(~"Tried to call a non-function!"), 
       },
     IReturn(_) => { /* can't get here */ },
 
   }
 }
+
+fn c() -> () { io::println("something cool"); }
+fn c1() -> () { ; }
 
 fn main() {
 
@@ -210,16 +241,17 @@ fn main() {
  hmap.insert( LString(@~"a"), LNum(56f) );
 
 
- let subprog = Execution { state: @mut true, constants: ~[LNum(70f), LTable(hmap), LString(@~"a")], prog: Program(~[
+ let subprog = Execution { state: @mut true, constants: ~[LNum(70f), LTable(@hmap), LString(@~"a")], prog: Program(~[
   ILoadNil(0, 55),
   ILoadK(1, 1),
   IGetTable(2, 1, -3),
   IReturn(2)
  ]) };
 
- let s = ~Execution { state: @mut true, constants: ~[LNum(500f), LNum(300f), LFunc(@subprog)], prog: Program(~[
+ let s = ~Execution { state: @mut true, constants: ~[LNum(500f), LNum(300f), LRustFunc(c)], prog: Program(~[
      ILoadK(1, 2),
      ICall(1, 0, 0),
+     ILoadK(1, 0),
      IAdd(3,1,-2), 
      ISub(3,3,2),
      IReturn(3),
@@ -248,9 +280,16 @@ fn main() {
 
 
  let mut regs = ~[LNum(0f), LNum(0f),LNum(1f),LNum(0f), LNum(0f),];
- let out = run(concat, &mut regs );
+ let out = run(s, &mut regs );
  io::println( out.to_str() );
 
+
+/*
+ let f1 = LRustFunc(c);
+ let f2 = LRustFunc(c1);
+
+ io::println( (f1 == f2).to_str() );
+*/
 
 }
 
