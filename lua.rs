@@ -44,11 +44,11 @@ enum LuaVal {
  LBool(bool),
  LTable(@linear::LinearMap<LuaVal, LuaVal>),
  LFunc(@Execution),
- LRustFunc(extern "Rust" fn() -> ()),
+ LRustFunc(extern "Rust" fn(reg: &mut ~[LuaVal])),
  LNil,
 }
 
-fn cmp_fn(a: extern "Rust" fn(), b: extern "Rust" fn()) -> bool {
+fn cmp_fn(a: extern "Rust" fn(&mut ~[LuaVal]), b: extern "Rust" fn(&mut ~[LuaVal])) -> bool {
     unsafe {
         let a_: *() = cast::transmute(a), b_: *() = cast::transmute(b);
         a_ == b_
@@ -160,7 +160,9 @@ impl ToStr for LuaVal {
    LNum(x) => x.to_str(),
    LString(s) => copy(*s),
    LNil => ~"nil",
-   _ => ~"yeah",
+   LRustFunc(x) => ~"Rust function",
+   LFunc(x) => ~"Lua function",
+   _ => ~"something else",
   }
  }
 }
@@ -220,7 +222,7 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal] 
 
     ICall(func, _, _) =>  match reg_l(func) {
         LFunc(subexec) => { let mut reg_prime = ~[]; reg[func] = run( subexec,  &mut reg_prime ); },
-	LRustFunc(f) => { f(); },
+	LRustFunc(f) => { f(reg); },
        _ => fail!(~"Tried to call a non-function!"), 
       },
     IReturn(_) => { /* can't get here */ },
@@ -228,8 +230,11 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal] 
   }
 }
 
-fn c() -> () { io::println("something cool"); }
-fn c1() -> () { ; }
+fn c(reg: &mut ~[LuaVal]) -> () { 
+    io::println(fmt!("somthing cool: %s", reg[0].to_str()));
+}
+
+
 
 fn main() {
 
@@ -279,7 +284,7 @@ fn main() {
   ]) };
 
 
- let mut regs = ~[LNum(0f), LNum(0f),LNum(1f),LNum(0f), LNum(0f),];
+ let mut regs = ~[LNum(5050f), LNum(0f),LNum(1f),LNum(0f), LNum(0f),];
  let out = run(s, &mut regs );
  io::println( out.to_str() );
 
