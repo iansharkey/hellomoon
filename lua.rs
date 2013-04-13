@@ -50,11 +50,11 @@ enum LuaVal {
 impl IterBytes for LuaVal {
   fn iter_bytes(&self, lsb0: bool, f: Cb) {
     match *self {
-      LString(x) => { x.iter_bytes(lsb0, f); }
-      LNum(x) => { (x as uint).iter_bytes(lsb0, f); }
-      LBool(x) => { x.iter_bytes(lsb0, f); }
-      LNil => { (true, false).iter_bytes(lsb0, f); }
-      _ => { fail!(~"Tried to hash a function!"); }      
+      LString(x) => x.iter_bytes(lsb0, f),
+      LNum(x) => (x as uint).iter_bytes(lsb0, f),
+      LBool(x) => x.iter_bytes(lsb0, f),
+      LNil => (true, false).iter_bytes(lsb0, f),
+      _ => fail!(~"Tried to hash a function!"),
      }
   }
 }
@@ -63,9 +63,9 @@ impl IterBytes for LuaVal {
 impl Add<LuaVal, LuaVal> for LuaVal {
  fn add(&self, other: &LuaVal) -> LuaVal {
   match (self, other) {
-   (&LNum(x), &LNum(y)) => { LNum(x+y) },
-   (&LString(x), &LString(y)) => { LString(@((*x)+(*y))) },
-   _ => { LNil },
+   (&LNum(x), &LNum(y)) => LNum(x+y),
+   (&LString(x), &LString(y)) => LString(@((*x)+(*y))),
+   _ => LNil,
   }
 
  }
@@ -74,8 +74,8 @@ impl Add<LuaVal, LuaVal> for LuaVal {
 impl Sub<LuaVal, LuaVal> for LuaVal {
  fn sub(&self, other: &LuaVal) -> LuaVal {
   match (self, other) {
-   (&LNum(x), &LNum(y)) => { LNum(x-y) },
-   _ => { LNil },
+   (&LNum(x), &LNum(y)) => LNum(x-y),
+   _ => LNil,
   }
  }
 }
@@ -83,8 +83,8 @@ impl Sub<LuaVal, LuaVal> for LuaVal {
 impl Mul<LuaVal, LuaVal> for LuaVal {
  fn mul(&self, other: &LuaVal) -> LuaVal {
   match (self, other) {
-   (&LNum(x), &LNum(y)) => { LNum(x*y) },
-   _ => { LNil },
+   (&LNum(x), &LNum(y)) => LNum(x*y),
+   _ => LNil,
   }
  }
 }
@@ -93,49 +93,47 @@ impl Mul<LuaVal, LuaVal> for LuaVal {
 impl Ord for LuaVal {
  fn lt(&self, other: &LuaVal) -> bool {
   match (self, other) {
-   (&LNum(x), &LNum(y)) => { x<y },
-   (&LString(x), &LString(y)) => { x < y },
-   _ => { false }
+   (&LNum(x), &LNum(y)) => x < y,
+   (&LString(x), &LString(y)) => x < y,
+   _ => false,
   }
  }
 
  fn le(&self, other: &LuaVal) -> bool {
   match (self, other) {
-   (&LNum(x), &LNum(y)) => { x<=y },
-   (&LString(x), &LString(y)) => { *x < *y },
-   _ => { false }
+   (&LNum(x), &LNum(y)) => x <= y,
+   (&LString(x), &LString(y)) => *x <= *y,
+   _ => false,
   }
  }
 
 
  fn ge(&self, other: &LuaVal) -> bool {
   match (self, other) {
-   (&LNum(x), &LNum(y)) => { x>=y },
-   (&LString(x), &LString(y)) => { *x < *y },
-   _ => { false }
+   (&LNum(x), &LNum(y)) => x >= y,
+   (&LString(x), &LString(y)) => *x >= *y,
+   _ => false,
   }
 
  }
 
  fn gt(&self, other: &LuaVal) -> bool {
   match (self, other) {
-   (&LNum(x), &LNum(y)) => { x>y },
-   (&LString(x), &LString(y)) => { *x < *y },
-   _ => { false }
+   (&LNum(x), &LNum(y)) => x > y,
+   (&LString(x), &LString(y)) => *x > *y,
+   _ => false,
   }
-
  }
- 
 }
 
 
 impl ToStr for LuaVal {
  fn to_str(&self) -> ~str { 
   match *self {
-   LNum(x) => { x.to_str() },
-   LString(s) => { copy(*s) },
-   LNil => { ~"nil" },
-   _ => { ~"yeah" },
+   LNum(x) => x.to_str(),
+   LString(s) => copy(*s),
+   LNil => ~"nil",
+   _ => ~"yeah",
   }
  }
 }
@@ -145,10 +143,10 @@ impl ToStr for LuaVal {
 fn run( execution: &Execution, regs: &mut ~[LuaVal] ) -> LuaVal {
  let mut pc = 0;
 
- let reg_l = |r: int| { if r<0 { copy(execution.constants[-r - 1]) } else { copy(regs[r]) } } ;  
+ let reg_l = |r: int| if r<0 { copy(execution.constants[-r - 1]) } else { copy(regs[r]) } ;
  loop {
    match execution.prog[pc] {
-    IReturn(src) => { return reg_l(src); },
+    IReturn(src) => return reg_l(src),
     _ => { step(execution.prog[pc], &mut pc, regs, &execution.constants); }
   }
  }
@@ -156,31 +154,30 @@ fn run( execution: &Execution, regs: &mut ~[LuaVal] ) -> LuaVal {
 
 fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal] ) {
 
- let jump = |n| { *pc+=n };
- let bump = || { jump(1); };
- let reg_l = |r: int| { if r<0 { copy(constants[-r - 1]) } else { copy(reg[r]) } } ;
+ let jump = |n|  *pc+=n;
+ let bump = || jump(1);;
+ let reg_l = |r: int| if r<0 { copy(constants[-r - 1]) } else { copy(reg[r]) };
 
  bump();
   match instr {
-    IAdd(dst, r1, r2) => { reg[dst] = reg_l(r1) + reg_l(r2);  },
-    ISub(dst, r1, r2) => { reg[dst] = reg_l(r1) - reg_l(r2);  },
-    IMul(dst, r1, r2) => { reg[dst] = reg_l(r1) * reg_l(r2);  },
-    IConcat(dst, r1, r2) => { reg[dst] = LString(@(reg_l(r1).to_str() + reg_l(r2).to_str())); },
+    IAdd(dst, r1, r2) => reg[dst] = reg_l(r1) + reg_l(r2),
+    ISub(dst, r1, r2) => reg[dst] = reg_l(r1) - reg_l(r2),
+    IMul(dst, r1, r2) => reg[dst] = reg_l(r1) * reg_l(r2),
+    IConcat(dst, r1, r2) => reg[dst] = LString(@(reg_l(r1).to_str() + reg_l(r2).to_str())),
 
-    ILoadK(dst, src) => { reg[dst] = copy(constants[src]); },
+    ILoadK(dst, src) => reg[dst] = copy(constants[src]),
     ILoadNil(start, end) => { grow(reg, end, &LNil); for uint::range(start, end) |i| { reg[i] = LNil; }; }
-    IMove(r1, r2) => { reg[r1] = reg_l(r2); },
+    IMove(r1, r2) => reg[r1] = reg_l(r2),
 
-    IGetTable(dst, tbl, index) => {
+    IGetTable(dst, tbl, index) => 
        match copy(reg[tbl]) {
-         LTable(table) => { reg[dst] = copy(*table.get(&reg_l(index)));  },
-	 _ => { fail!(~"Tried to index a non-table"); },
+         LTable(table) => reg[dst] = copy(*table.get(&reg_l(index))),
+	 _ => fail!(~"Tried to index a non-table"),
 
-       }
-    },
+       },
 
-    IJmp(offset) => { jump(offset - 1); },
-    ILt(r1, r2) => { if reg_l(r1) < reg_l(r2) {;} else { bump(); } },
+    IJmp(offset) => jump(offset - 1),
+    ILt(r1, r2) => if reg_l(r1) < reg_l(r2) {;} else { bump(); },
 
     IForPrep(index, offset) => { reg[index] = reg[index] - reg[index+2]; jump(offset); },
     IForLoop(index, offset) => { reg[index] = reg[index] + reg[index+2];
@@ -194,12 +191,10 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal] 
 			       }
     
 
-    ICall(func, _, _) => { 
-      match reg_l(func) {
+    ICall(func, _, _) =>  match reg_l(func) {
         LFunc(subexec) => { let mut reg_prime = ~[]; reg[func] = run( subexec,  &mut reg_prime ); },
        _ => fail!(~"Tried to call a non-function!"), 
-      }
-    },
+      },
     IReturn(_) => { /* can't get here */ },
 
   }
