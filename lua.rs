@@ -172,7 +172,7 @@ impl ToStr for LuaVal {
 fn run( execution: &Execution, regs: &mut ~[LuaVal] ) -> LuaVal {
  let mut pc = 0;
 
- let reg_l = |r: int| if r<0 { copy(execution.constants[-r - 1]) } else { copy(regs[r]) } ;
+ let reg_l = |r: int| if r<0 { execution.constants[-r - 1] } else { regs[r] } ;
  loop {
    match execution.prog[pc] {
     IReturn(src) => return reg_l(src),
@@ -185,7 +185,7 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal] 
 
  let jump = |n|  *pc+=n;
  let bump = || jump(1);;
- let reg_l = |r: int| if r<0 { copy(constants[-r - 1]) } else { copy(reg[r]) };
+ let reg_l = |r: int| if r<0 { constants[-r - 1] } else { reg[r] };
 
  bump();
   match instr {
@@ -194,7 +194,7 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal] 
     IMul(dst, r1, r2) => reg[dst] = reg_l(r1) * reg_l(r2),
     IConcat(dst, r1, r2) => reg[dst] = LString(@(reg_l(r1).to_str() + reg_l(r2).to_str())),
 
-    ILoadK(dst, src) => reg[dst] = copy(constants[src]),
+    ILoadK(dst, src) => reg[dst] = constants[src],
     ILoadNil(start, end) => { grow(reg, end, &LNil); for uint::range(start, end) |i| { reg[i] = LNil; }; }
     IMove(r1, r2) => reg[r1] = reg_l(r2),
 
@@ -210,7 +210,7 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal] 
 
     IForPrep(index, offset) => { reg[index] = reg[index] - reg[index+2]; jump(offset); },
     IForLoop(index, offset) => { reg[index] = reg[index] + reg[index+2];
-    		    	         let action = ||  { jump(offset); reg[index+3] = copy(reg[index]); };
+    		    	         let action = ||  { jump(offset); reg[index+3] = reg[index]; };
     		    	         if reg[index+2] > LNum(0f) { 
 				   if reg[index] <= reg[index+1] { action(); }
 				 }
