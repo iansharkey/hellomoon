@@ -4,11 +4,8 @@ extern mod luaval;
 use core::hashmap::linear;
 use core::ops::*;
 use core::vec::*;
-use core::to_bytes::*;
 
 use luaval::luaval::*;
-
-
 
 
 fn run( execution: &Execution, regs: &mut ~[LuaVal] ) -> ~[LuaVal] {
@@ -16,7 +13,6 @@ fn run( execution: &Execution, regs: &mut ~[LuaVal] ) -> ~[LuaVal] {
  let mut &execution_prime = &(*execution);
  let mut &regs_prime = regs;
 
- let reg_l = |r: int| if r<0 { execution_prime.constants[-r - 1] } else { regs_prime[r] } ;
  loop {
    match execution_prime.prog[pc] {
     IReturn(src, extent) => return from_fn( (extent-1) as uint, |i| { regs_prime[src+i as int] }),
