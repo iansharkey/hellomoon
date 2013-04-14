@@ -11,6 +11,7 @@ enum Instr {
  IAdd(int, int, int),
  ISub(int, int, int),
  IMul(int, int, int),
+ IDiv(int, int, int),
  IConcat(int, int, int),
  IJmp(int),
  ILt(int, int),
@@ -20,8 +21,11 @@ enum Instr {
  ICall(int, int, int), 
  ILoadNil(uint, uint),
  IGetTable(int, int, int),
+ ISetTable(int, int, int),
  IForPrep(int, int),
  IForLoop(int, int),
+ INot(int, int),
+ IUnm(int, int),
 }
 
 #[deriving(Eq)]
@@ -42,7 +46,7 @@ enum LuaVal {
  LString(@~str),
  LNum(float),
  LBool(bool),
- LTable(@linear::LinearMap<LuaVal, LuaVal>),
+ LTable(@mut linear::LinearMap<LuaVal, LuaVal>, @[LuaVal]),
  LFunc(@Execution),
  LRustFunc(extern "Rust" fn(reg: &mut ~[LuaVal])),
  LNil,
@@ -61,7 +65,7 @@ impl Eq for LuaVal {
       (&LNum(x), &LNum(y)) => x == y,
       (&LString(x), &LString(y)) => x == y,
       (&LBool(x), &LBool(y)) => x == y,
-      (&LTable(x), &LTable(y)) => x == y,
+      (&LTable(x, x1), &LTable(y, y1)) => (x == y) && (x1 == y1),
       (&LNil, &LNil) => true,
       (&LRustFunc(x), &LRustFunc(y)) => { cmp_fn(x, y) }
       (_, _) => false
@@ -91,7 +95,7 @@ impl Add<LuaVal, LuaVal> for LuaVal {
  fn add(&self, other: &LuaVal) -> LuaVal {
   match (self, other) {
    (&LNum(x), &LNum(y)) => LNum(x+y),
-   (&LString(x), &LString(y)) => LString(@((*x)+(*y))),
+   (&LString(x), &LString(y)) => LString(@(x.to_owned() + y.to_owned()) ),
    _ => LNil,
   }
 
@@ -116,6 +120,16 @@ impl Mul<LuaVal, LuaVal> for LuaVal {
  }
 }
 
+impl Div<LuaVal, LuaVal> for LuaVal {
+ fn div(&self, other: &LuaVal) -> LuaVal {
+  match (self, other) {
+   (&LNum(x), &LNum(y)) => LNum(x/y),
+   _ => fail!(~"Attempt to divide non-number values!"),
+  }
+ }
+}
+
+
 
 impl Ord for LuaVal {
  fn lt(&self, other: &LuaVal) -> bool {
@@ -129,7 +143,7 @@ impl Ord for LuaVal {
  fn le(&self, other: &LuaVal) -> bool {
   match (self, other) {
    (&LNum(x), &LNum(y)) => x <= y,
-   (&LString(x), &LString(y)) => *x <= *y,
+   (&LString(x), &LString(y)) => x.to_owned() <= y.to_owned(),
    _ => false,
   }
  }
@@ -138,7 +152,7 @@ impl Ord for LuaVal {
  fn ge(&self, other: &LuaVal) -> bool {
   match (self, other) {
    (&LNum(x), &LNum(y)) => x >= y,
-   (&LString(x), &LString(y)) => *x >= *y,
+   (&LString(x), &LString(y)) => x.to_owned() >= y.to_owned(),
    _ => false,
   }
 
@@ -147,7 +161,7 @@ impl Ord for LuaVal {
  fn gt(&self, other: &LuaVal) -> bool {
   match (self, other) {
    (&LNum(x), &LNum(y)) => x > y,
-   (&LString(x), &LString(y)) => *x > *y,
+   (&LString(x), &LString(y)) => x.to_owned() > y.to_owned(),
    _ => false,
   }
  }
@@ -158,7 +172,7 @@ impl ToStr for LuaVal {
  fn to_str(&self) -> ~str { 
   match *self {
    LNum(x) => x.to_str(),
-   LString(s) => copy(*s),
+   LString(s) => s.to_owned(),
    LNil => ~"nil",
    LRustFunc(x) => ~"Rust function",
    LFunc(x) => ~"Lua function",
@@ -192,7 +206,23 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal] 
     IAdd(dst, r1, r2) => reg[dst] = reg_l(r1) + reg_l(r2),
     ISub(dst, r1, r2) => reg[dst] = reg_l(r1) - reg_l(r2),
     IMul(dst, r1, r2) => reg[dst] = reg_l(r1) * reg_l(r2),
+    IDiv(dst, r1, r2) => reg[dst] = reg_l(r1) / reg_l(r2),
     IConcat(dst, r1, r2) => reg[dst] = LString(@(reg_l(r1).to_str() + reg_l(r2).to_str())),
+
+    INot(dst, src) => {
+      reg[src] = match reg[dst] {
+       LBool(x) => LBool(!x),
+       LNil => LBool(true),
+       _ => LBool(false),
+      }
+    },
+
+    IUnm(dst, src) => {
+      reg[src] = match reg[dst] {
+        LNum(x) => LNum(-x),
+	_ => fail!(~"Attempt to perform arithmetic on a non-number value!")
+      }
+    }
 
     ILoadK(dst, src) => reg[dst] = constants[src],
     ILoadNil(start, end) => { grow(reg, end, &LNil); for uint::range(start, end) |i| { reg[i] = LNil; }; }
@@ -200,10 +230,18 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal] 
 
     IGetTable(dst, tbl, index) => 
        match reg[tbl] {
-         LTable(table) => reg[dst] = *table.get(&reg_l(index)),
+         LTable(table, lst) => reg[dst] = *table.get(&reg_l(index)),
 	 _ => fail!(~"Tried to index a non-table"),
 
        },
+
+    ISetTable(tbl, index, value) =>
+      match reg[tbl] {
+        LTable(table, lst) => { table.insert(reg_l(index), reg_l(value)); },
+	// Note: need to handle meta-tables here
+	_ => fail!(~"Tried to insert a value into a non-table!")
+      },
+
 
     IJmp(offset) => jump(offset - 1),
     ILt(r1, r2) => if reg_l(r1) < reg_l(r2) {;} else { bump(); },
@@ -246,7 +284,7 @@ fn main() {
  hmap.insert( LString(@~"a"), LNum(56f) );
 
 
- let subprog = Execution { state: @mut true, constants: ~[LNum(70f), LTable(@hmap), LString(@~"a")], prog: Program(~[
+ let subprog = Execution { state: @mut true, constants: ~[LNum(70f), LTable(@mut hmap, @[]), LString(@~"a")], prog: Program(~[
   ILoadNil(0, 55),
   ILoadK(1, 1),
   IGetTable(2, 1, -3),
@@ -287,14 +325,6 @@ fn main() {
  let mut regs = ~[LNum(5050f), LNum(0f),LNum(1f),LNum(0f), LNum(0f),];
  let out = run(s, &mut regs );
  io::println( out.to_str() );
-
-
-/*
- let f1 = LRustFunc(c);
- let f2 = LRustFunc(c1);
-
- io::println( (f1 == f2).to_str() );
-*/
 
 }
 
