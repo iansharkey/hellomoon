@@ -36,41 +36,34 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal] 
  let reg_l = |r: int| if r<0 { constants[-r - 1] } else { reg[r] };
 
  bump();
-  match instr {
+ match instr {
     IAdd(dst, r1, r2) => reg[dst] = reg_l(r1) + reg_l(r2),
     ISub(dst, r1, r2) => reg[dst] = reg_l(r1) - reg_l(r2),
     IMul(dst, r1, r2) => reg[dst] = reg_l(r1) * reg_l(r2),
     IDiv(dst, r1, r2) => reg[dst] = reg_l(r1) / reg_l(r2),
     IConcat(dst, r1, r2) => reg[dst] = LString(@(reg_l(r1).to_str() + reg_l(r2).to_str())),
 
-    INot(dst, src) => {
-      reg[src] = match reg[dst] {
+    INot(dst, src) =>  reg[src] = match reg[dst] {
        LBool(x) => LBool(!x),
        LNil => LBool(true),
        _ => LBool(false),
-      }
     },
 
-    IUnm(dst, src) => {
-      reg[src] = match reg[dst] {
+    IUnm(dst, src) => reg[src] = match reg[dst] {
         LNum(x) => LNum(-x),
 	_ => fail!(~"Attempt to perform arithmetic on a non-number value!")
-      }
-    }
+      },
 
     ILoadK(dst, src) => reg[dst] = constants[src],
     ILoadNil(start, end) => { grow(reg, end, &LNil); for uint::range(start, end) |i| { reg[i] = LNil; }; }
     IMove(r1, r2) => reg[r1] = reg_l(r2),
 
-    IGetTable(dst, tbl, index) => 
-       match reg[tbl] {
+    IGetTable(dst, tbl, index) => match reg[tbl] {
          LTable(table, _) => reg[dst] = *table.get(&reg_l(index)),
 	 _ => fail!(~"Tried to index a non-table"),
-
        },
 
-    ISetTable(tbl, index, value) =>
-      match reg[tbl] {
+    ISetTable(tbl, index, value) => match reg[tbl] {
         LTable(table, _) => { table.insert(reg_l(index), reg_l(value)); },
 	// Note: need to handle meta-tables here
 	_ => fail!(~"Tried to insert a value into a non-table!")
@@ -103,8 +96,8 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal] 
 	    0 => return, // TODO: take all return values
 	    1 => return,
 	    _ => for int::range(0, ret_extent-2+1) |i| { reg[func+i] = ret_regs[i]; },
-	    }
-	},
+	}
+    },
     IReturn(_, _) => { /* can't get here */ },
     ITailCall(_, _, _) => { /* can't get here */ },
 
