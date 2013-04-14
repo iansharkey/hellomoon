@@ -196,7 +196,7 @@ fn run( execution: &Execution, regs: &mut ~[LuaVal] ) -> ~[LuaVal] {
     ITailCall(func, extent, _) => match regs_prime[func] {
       LFunc(f_execution) => {
         execution_prime = copy(*f_execution);
-    	regs_prime = from_fn( extent as uint, |i| { regs_prime[func+1+i as int] }); 	
+    	regs_prime = from_fn( (extent-1) as uint, |i| { regs_prime[func+1+i as int] }); 	
 	pc = 0;
       }
       _ => fail!(~"Cannot tail call to non-Lua function!")
@@ -270,10 +270,10 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal] 
     
 
     ICall(func, call_extent, ret_extent) =>  {
-    	let mut reg_prime = from_fn( call_extent as uint, |i| { reg[func+1+i as int] }); 
+    	let mut reg_prime = from_fn( (call_extent-1) as uint, |i| { reg[func+1+i as int] }); 
 	let ret_regs = match reg[func] {
           LFunc(subexec) => run( subexec, &mut reg_prime),
-	  LRustFunc(f) =>  f(reg),
+	  LRustFunc(f) =>  f(&mut reg_prime),
           _ => fail!(~"Tried to call a non-function!"),
 	};
 	match ret_extent as uint {
@@ -314,7 +314,8 @@ fn main() {
 
  let s = ~Execution { state: @mut true, constants: ~[LNum(500f), LNum(300f), LRustFunc(c), LFunc(@subprog)], prog: Program(~[
      ILoadK(1, 2),
-     ICall(1, 0, 2),
+     ILoadK(2, 0),
+     ICall(1, 2, 2),
 //     ILoadK(1, 0),
      IAdd(3,1,-2), 
      ISub(3,3,2),
@@ -343,7 +344,7 @@ fn main() {
   ]) };
 
 
- let mut regs = ~[LNum(5050f), LNum(0f),LNum(1f),LNum(0f), LNum(0f),];
+ let mut regs = ~[LNum(5050f), LNum(0f),LNum(111f),LNum(0f), LNum(0f),];
  let out = run(s, &mut regs );
  io::println( out.to_str() );
 
