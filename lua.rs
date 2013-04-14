@@ -19,6 +19,7 @@ enum Instr {
  ILoadK(int, int),
  IReturn(int, int),
  ICall(int, int, int), 
+ ITailCall(int, int, int),
  ILoadNil(uint, uint),
  IGetTable(int, int, int),
  ISetTable(int, int, int),
@@ -48,11 +49,11 @@ enum LuaVal {
  LBool(bool),
  LTable(@mut linear::LinearMap<LuaVal, LuaVal>, @[LuaVal]),
  LFunc(@Execution),
- LRustFunc(extern "Rust" fn(reg: &mut ~[LuaVal])),
+ LRustFunc(extern "Rust" fn(reg: &mut ~[LuaVal]) -> ~[LuaVal] ),
  LNil,
 }
 
-fn cmp_fn(a: extern "Rust" fn(&mut ~[LuaVal]), b: extern "Rust" fn(&mut ~[LuaVal])) -> bool {
+fn cmp_fn(a: extern "Rust" fn(&mut ~[LuaVal]) -> ~[LuaVal], b: extern "Rust" fn(&mut ~[LuaVal]) -> ~[LuaVal]) -> bool {
     unsafe {
         let a_: *() = cast::transmute(a), b_: *() = cast::transmute(b);
         a_ == b_
@@ -185,12 +186,22 @@ impl ToStr for LuaVal {
 
 fn run( execution: &Execution, regs: &mut ~[LuaVal] ) -> ~[LuaVal] {
  let mut pc = 0;
+ let mut &execution_prime = &(*execution);
+ let mut &regs_prime = regs;
 
- let reg_l = |r: int| if r<0 { execution.constants[-r - 1] } else { regs[r] } ;
+ let reg_l = |r: int| if r<0 { execution_prime.constants[-r - 1] } else { regs_prime[r] } ;
  loop {
-   match execution.prog[pc] {
-    IReturn(src, extent) => return from_fn( (extent-1) as uint, |i| { regs[src+i as int] }),
-    _ => { step(execution.prog[pc], &mut pc, regs, &execution.constants); }
+   match execution_prime.prog[pc] {
+    IReturn(src, extent) => return from_fn( (extent-1) as uint, |i| { regs_prime[src+i as int] }),
+    ITailCall(func, extent, _) => match regs_prime[func] {
+      LFunc(f_execution) => {
+        execution_prime = copy(*f_execution);
+    	regs_prime = from_fn( extent as uint, |i| { regs_prime[func+1+i as int] }); 	
+	pc = 0;
+      }
+      _ => fail!(~"Cannot tail call to non-Lua function!")
+    },
+    _ => step(execution_prime.prog[pc], &mut pc, &mut regs_prime, &execution_prime.constants)
   }
  }
 }
@@ -258,18 +269,28 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal] 
 			       }
     
 
-    ICall(func, call_extent, _) =>  match reg_l(func) {
-        LFunc(subexec) => { let mut reg_prime = from_fn( call_extent as uint, |i| { reg[func+1+i as int] }); reg[func] = run( subexec, &mut reg_prime)[0]; },
-	LRustFunc(f) => { f(reg); },
-       _ => fail!(~"Tried to call a non-function!"), 
-      },
+    ICall(func, call_extent, ret_extent) =>  {
+    	let mut reg_prime = from_fn( call_extent as uint, |i| { reg[func+1+i as int] }); 
+	let ret_regs = match reg[func] {
+          LFunc(subexec) => run( subexec, &mut reg_prime),
+	  LRustFunc(f) =>  f(reg),
+          _ => fail!(~"Tried to call a non-function!"),
+	};
+	match ret_extent as uint {
+	    0 => return, // TODO: take all return values
+	    1 => return,
+	    _ => for int::range(0, ret_extent-2+1) |i| { reg[func+i] = ret_regs[i]; },
+	    }
+	},
     IReturn(_, _) => { /* can't get here */ },
+    ITailCall(_, _, _) => { /* can't get here */ },
 
   }
 }
 
-fn c(reg: &mut ~[LuaVal]) -> () { 
+fn c(reg: &mut ~[LuaVal]) -> ~[LuaVal] { 
     io::println(fmt!("somthing cool: %s", reg[0].to_str()));
+    return ~[LNum(44f)];
 }
 
 
@@ -292,8 +313,8 @@ fn main() {
  ]) };
 
  let s = ~Execution { state: @mut true, constants: ~[LNum(500f), LNum(300f), LRustFunc(c), LFunc(@subprog)], prog: Program(~[
-     ILoadK(1, 3),
-     ICall(1, 0, 0),
+     ILoadK(1, 2),
+     ICall(1, 0, 2),
 //     ILoadK(1, 0),
      IAdd(3,1,-2), 
      ISub(3,3,2),
