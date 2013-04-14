@@ -127,7 +127,7 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal],
 }
 
 fn c(reg: &mut ~[LuaVal]) -> ~[LuaVal] { 
-    io::println(fmt!("somthing cool: %s", reg[0].to_str()));
+    io::println(fmt!("somthing cooler (global): %s", reg[0].to_str()));
     return ~[LNum(44f)];
 }
 
@@ -138,7 +138,7 @@ fn main() {
    // let registers = @mut [LNum(0.0f), LNum(3.0f), LNum(1.0f), LNum(2.0f)];
 
  let globals = @mut linear::LinearMap::new();
-
+ 
  let mut hmap: linear::LinearMap<LuaVal, LuaVal> = linear::LinearMap::new();
 
  hmap.insert( LString(@~"a"), LNum(56f) );
@@ -151,8 +151,10 @@ fn main() {
   IReturn(2, 2)
  ]) };
 
- let s = ~Execution { globals: globals, state: @mut true, constants: ~[LNum(500f), LNum(300f), LRustFunc(c), LFunc(@subprog)], prog: Program(~[
-     ILoadK(1, 2),
+ globals.insert(LString(@~"foo"), LRustFunc(c));
+
+ let s = ~Execution { globals: globals, state: @mut true, constants: ~[LNum(500f), LNum(300f), LString(@~"foo")], prog: Program(~[
+     IGetGlobal(1, 2),
      ILoadK(2, 0),
      ICall(1, 2, 2),
 //     ILoadK(1, 0),
@@ -160,7 +162,7 @@ fn main() {
      ISub(3,3,2),
      IReturn(3, 2),
     ]) };
-
+/*
  let fancy = ~Execution { globals: globals, state: @mut true, constants: ~[LNum(0f), LNum(1f), LNum(100f)], prog: Program(~[
    ILoadK(0, 0),
    ILoadK(1, 1),
@@ -181,6 +183,8 @@ fn main() {
    IConcat(3, 3, -4),
    IReturn(3, 2),
   ]) };
+*/
+
 
 
  let mut regs = ~[LNum(5050f), LNum(0f),LNum(111f),LNum(0f), LNum(0f),];
