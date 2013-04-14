@@ -1,10 +1,10 @@
 
 use core::hashmap::linear;
 use core::ops::*;
-use core::vec::grow;
+use core::vec::*;
 use core::to_bytes::*;
-use core::ptr::ref_eq;
-use core::cast::transmute_region;
+
+
 
 #[deriving(Eq)]
 enum Instr {
@@ -17,7 +17,7 @@ enum Instr {
  ILt(int, int),
  IMove(int, int),
  ILoadK(int, int),
- IReturn(int),
+ IReturn(int, int),
  ICall(int, int, int), 
  ILoadNil(uint, uint),
  IGetTable(int, int, int),
@@ -174,8 +174,8 @@ impl ToStr for LuaVal {
    LNum(x) => x.to_str(),
    LString(s) => s.to_owned(),
    LNil => ~"nil",
-   LRustFunc(x) => ~"Rust function",
-   LFunc(x) => ~"Lua function",
+   LRustFunc(_) => ~"Rust function",
+   LFunc(_) => ~"Lua function",
    _ => ~"something else",
   }
  }
@@ -183,13 +183,13 @@ impl ToStr for LuaVal {
 
 
 
-fn run( execution: &Execution, regs: &mut ~[LuaVal] ) -> LuaVal {
+fn run( execution: &Execution, regs: &mut ~[LuaVal] ) -> ~[LuaVal] {
  let mut pc = 0;
 
  let reg_l = |r: int| if r<0 { execution.constants[-r - 1] } else { regs[r] } ;
  loop {
    match execution.prog[pc] {
-    IReturn(src) => return reg_l(src),
+    IReturn(src, extent) => return from_fn( (extent-1) as uint, |i| { regs[src+i as int] }),
     _ => { step(execution.prog[pc], &mut pc, regs, &execution.constants); }
   }
  }
@@ -230,14 +230,14 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal] 
 
     IGetTable(dst, tbl, index) => 
        match reg[tbl] {
-         LTable(table, lst) => reg[dst] = *table.get(&reg_l(index)),
+         LTable(table, _) => reg[dst] = *table.get(&reg_l(index)),
 	 _ => fail!(~"Tried to index a non-table"),
 
        },
 
     ISetTable(tbl, index, value) =>
       match reg[tbl] {
-        LTable(table, lst) => { table.insert(reg_l(index), reg_l(value)); },
+        LTable(table, _) => { table.insert(reg_l(index), reg_l(value)); },
 	// Note: need to handle meta-tables here
 	_ => fail!(~"Tried to insert a value into a non-table!")
       },
@@ -258,12 +258,12 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal] 
 			       }
     
 
-    ICall(func, _, _) =>  match reg_l(func) {
-        LFunc(subexec) => { let mut reg_prime = ~[]; reg[func] = run( subexec,  &mut reg_prime ); },
+    ICall(func, call_extent, _) =>  match reg_l(func) {
+        LFunc(subexec) => { let mut reg_prime = from_fn( call_extent as uint, |i| { reg[func+1+i as int] }); reg[func] = run( subexec, &mut reg_prime)[0]; },
 	LRustFunc(f) => { f(reg); },
        _ => fail!(~"Tried to call a non-function!"), 
       },
-    IReturn(_) => { /* can't get here */ },
+    IReturn(_, _) => { /* can't get here */ },
 
   }
 }
@@ -288,16 +288,16 @@ fn main() {
   ILoadNil(0, 55),
   ILoadK(1, 1),
   IGetTable(2, 1, -3),
-  IReturn(2)
+  IReturn(2, 2)
  ]) };
 
- let s = ~Execution { state: @mut true, constants: ~[LNum(500f), LNum(300f), LRustFunc(c)], prog: Program(~[
-     ILoadK(1, 2),
+ let s = ~Execution { state: @mut true, constants: ~[LNum(500f), LNum(300f), LRustFunc(c), LFunc(@subprog)], prog: Program(~[
+     ILoadK(1, 3),
      ICall(1, 0, 0),
-     ILoadK(1, 0),
+//     ILoadK(1, 0),
      IAdd(3,1,-2), 
      ISub(3,3,2),
-     IReturn(3),
+     IReturn(3, 2),
     ]) };
 
  let fancy = ~Execution { state: @mut true, constants: ~[LNum(0f), LNum(1f), LNum(100f)], prog: Program(~[
@@ -308,7 +308,7 @@ fn main() {
    IForPrep(1, 1),
    IAdd(0, 4, 0),
    IForLoop(1, -2),
-   IReturn(0),
+   IReturn(0, 2),
   ]) };
 
   let concat = ~Execution { state: @mut true, constants: ~[LNum(55f), LNum(33f), LNum(22f), LNum(66f)], prog: Program(~[
@@ -318,7 +318,7 @@ fn main() {
    IConcat(3, 0, 1),
    IConcat(3, 3, 1),
    IConcat(3, 3, -4),
-   IReturn(3),
+   IReturn(3, 2),
   ]) };
 
 
