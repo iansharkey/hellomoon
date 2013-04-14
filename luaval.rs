@@ -36,8 +36,8 @@ pub enum Instr {
  ILoadNil(uint, uint),
  ILoadBool(int, int, int),
 
-// IGetGlobal(int, int),
-// ISetGlobal(int, int),
+ IGetGlobal(int, int),
+ ISetGlobal(int, int),
 
 // IGetUpval(int, int),
 // ISetUpval(int, int),
@@ -74,6 +74,7 @@ pub struct Execution {
   state: @mut bool,
   constants: ~[LuaVal],
   prog: Program,
+  globals: @mut linear::LinearMap<LuaVal, LuaVal>,
 }
 
 

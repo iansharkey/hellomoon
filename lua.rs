@@ -24,12 +24,12 @@ fn run( execution: &Execution, regs: &mut ~[LuaVal] ) -> ~[LuaVal] {
       }
       _ => fail!(~"Cannot tail call to non-Lua function!")
     },
-    _ => step(execution_prime.prog[pc], &mut pc, &mut regs_prime, &execution_prime.constants)
+    _ => step(execution_prime.prog[pc], &mut pc, &mut regs_prime, &execution_prime.constants, execution_prime.globals)
   }
  }
 }
 
-fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal] ) {
+fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal], globals: &mut linear::LinearMap<LuaVal, LuaVal> ) {
 
  let jump = |n|  *pc+=n;
  let bump = || jump(1);;
@@ -70,6 +70,9 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal] 
     IMove(r1, r2) => reg[r1] = reg_k(r2),
     ILoadBool(dst, b, c) => { reg[dst] = LBool(num_to_bool(b)); if num_to_bool(c) { bump(); } },
 
+
+    IGetGlobal(dst, k) => reg[dst] = *globals.get(&constants[k]),
+    ISetGlobal(src, k) => {globals.insert(constants[k], reg[src]); },
 
     IGetTable(dst, tbl, index) => match reg[tbl] {
          LTable(table, _) => reg[dst] = *table.get(&reg_k(index)),
@@ -134,20 +137,21 @@ fn main() {
 
    // let registers = @mut [LNum(0.0f), LNum(3.0f), LNum(1.0f), LNum(2.0f)];
 
+ let globals = @mut linear::LinearMap::new();
 
  let mut hmap: linear::LinearMap<LuaVal, LuaVal> = linear::LinearMap::new();
 
  hmap.insert( LString(@~"a"), LNum(56f) );
 
 
- let subprog = Execution { state: @mut true, constants: ~[LNum(70f), LTable(@mut hmap, @[]), LString(@~"a")], prog: Program(~[
+ let subprog = Execution { globals: globals, state: @mut true, constants: ~[LNum(70f), LTable(@mut hmap, @[]), LString(@~"a")], prog: Program(~[
   ILoadNil(0, 55),
   ILoadK(1, 1),
   IGetTable(2, 1, -3),
   IReturn(2, 2)
  ]) };
 
- let s = ~Execution { state: @mut true, constants: ~[LNum(500f), LNum(300f), LRustFunc(c), LFunc(@subprog)], prog: Program(~[
+ let s = ~Execution { globals: globals, state: @mut true, constants: ~[LNum(500f), LNum(300f), LRustFunc(c), LFunc(@subprog)], prog: Program(~[
      ILoadK(1, 2),
      ILoadK(2, 0),
      ICall(1, 2, 2),
@@ -157,7 +161,7 @@ fn main() {
      IReturn(3, 2),
     ]) };
 
- let fancy = ~Execution { state: @mut true, constants: ~[LNum(0f), LNum(1f), LNum(100f)], prog: Program(~[
+ let fancy = ~Execution { globals: globals, state: @mut true, constants: ~[LNum(0f), LNum(1f), LNum(100f)], prog: Program(~[
    ILoadK(0, 0),
    ILoadK(1, 1),
    ILoadK(2, 2),
@@ -168,7 +172,7 @@ fn main() {
    IReturn(0, 2),
   ]) };
 
-  let concat = ~Execution { state: @mut true, constants: ~[LNum(55f), LNum(33f), LNum(22f), LNum(66f)], prog: Program(~[
+  let concat = ~Execution { globals: globals, state: @mut true, constants: ~[LNum(55f), LNum(33f), LNum(22f), LNum(66f)], prog: Program(~[
    ILoadK(0, 0),
    ILoadK(1, 1),
    ILoadK(2, 2),
