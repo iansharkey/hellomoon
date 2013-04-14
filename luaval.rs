@@ -9,25 +9,58 @@ use core::to_bytes::*;
 
 #[deriving(Eq)]
 pub enum Instr {
+ IEq(int, int, int),
+ ILt(int, int, int),
+ ILe(int, int, int),
+
+ ITest(int, int),
+ ITestSet(int, int, int),
+
+ INot(int, int),
+ IUnm(int, int),
+
+
  IAdd(int, int, int),
  ISub(int, int, int),
  IMul(int, int, int),
  IDiv(int, int, int),
+// IPow(int, int, int),
+// IMod(int, int, int),
+
+
  IConcat(int, int, int),
  IJmp(int),
- ILt(int, int),
+
  IMove(int, int),
  ILoadK(int, int),
+ ILoadNil(uint, uint),
+ ILoadBool(int, int, int),
+
+// IGetGlobal(int, int),
+// ISetGlobal(int, int),
+
+// IGetUpval(int, int),
+// ISetUpval(int, int),
+
  IReturn(int, int),
  ICall(int, int, int), 
  ITailCall(int, int, int),
- ILoadNil(uint, uint),
+
+// IVarArg(int, int)
+// IClosure(int, int),
+// IClose(int),
+
+// ILen(int, int)
+// INewTable(int, int, int),
+// ISetList(int, int, int),
  IGetTable(int, int, int),
  ISetTable(int, int, int),
+ ISelf(int, int, int),
+
  IForPrep(int, int),
  IForLoop(int, int),
- INot(int, int),
- IUnm(int, int),
+// ITForLoop(int, int)
+
 }
 
 

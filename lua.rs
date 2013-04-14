@@ -33,21 +33,32 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal] 
 
  let jump = |n|  *pc+=n;
  let bump = || jump(1);;
- let reg_l = |r: int| if r<0 { constants[-r - 1] } else { reg[r] };
+ let reg_k = |r: int| if r<0 { constants[-r - 1] } else { reg[r] };
+ let num_to_bool = |n:int| match n { 0 => false, _ => true };
+ let lval_to_bool = |lval:LuaVal| match lval {
+       LBool(x) => x,
+       LNil => false,
+       _ => true,
+    };
 
  bump();
  match instr {
-    IAdd(dst, r1, r2) => reg[dst] = reg_l(r1) + reg_l(r2),
-    ISub(dst, r1, r2) => reg[dst] = reg_l(r1) - reg_l(r2),
-    IMul(dst, r1, r2) => reg[dst] = reg_l(r1) * reg_l(r2),
-    IDiv(dst, r1, r2) => reg[dst] = reg_l(r1) / reg_l(r2),
-    IConcat(dst, r1, r2) => reg[dst] = LString(@(reg_l(r1).to_str() + reg_l(r2).to_str())),
+    IEq(check, t1, t2) => if (reg_k(t1) == reg_k(t2)) != num_to_bool(check)  { bump(); },
+    ILt(check, t1, t2) => if (reg_k(t1) < reg_k(t2)) != num_to_bool(check)  { bump(); },
+    ILe(check, t1, t2) => if (reg_k(t1) <= reg_k(t2)) != num_to_bool(check)  { bump(); },
 
-    INot(dst, src) =>  reg[src] = match reg[dst] {
-       LBool(x) => LBool(!x),
-       LNil => LBool(true),
-       _ => LBool(false),
-    },
+    ITest(r, c) => if !(lval_to_bool(reg[r]) != num_to_bool(c)) { bump(); },
+    ITestSet(dst, r, c) => if (lval_to_bool(reg[r]) != num_to_bool(c)) { reg[dst] = reg[r]; } else { bump(); },
+
+    IAdd(dst, r1, r2) => reg[dst] = reg_k(r1) + reg_k(r2),
+    ISub(dst, r1, r2) => reg[dst] = reg_k(r1) - reg_k(r2),
+    IMul(dst, r1, r2) => reg[dst] = reg_k(r1) * reg_k(r2),
+    IDiv(dst, r1, r2) => reg[dst] = reg_k(r1) / reg_k(r2),
+
+    // TODO: this should operate over all the strings between r1 and r2
+    IConcat(dst, r1, r2) => reg[dst] = LString(@(reg_k(r1).to_str() + reg_k(r2).to_str())),
+
+    INot(dst, src) =>  reg[dst] = LBool(!lval_to_bool(reg[src])),
 
     IUnm(dst, src) => reg[src] = match reg[dst] {
         LNum(x) => LNum(-x),
@@ -56,22 +67,30 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal] 
 
     ILoadK(dst, src) => reg[dst] = constants[src],
     ILoadNil(start, end) => { grow(reg, end, &LNil); for uint::range(start, end) |i| { reg[i] = LNil; }; }
-    IMove(r1, r2) => reg[r1] = reg_l(r2),
+    IMove(r1, r2) => reg[r1] = reg_k(r2),
+    ILoadBool(dst, b, c) => { reg[dst] = LBool(num_to_bool(b)); if num_to_bool(c) { bump(); } },
+
 
     IGetTable(dst, tbl, index) => match reg[tbl] {
-         LTable(table, _) => reg[dst] = *table.get(&reg_l(index)),
+         LTable(table, _) => reg[dst] = *table.get(&reg_k(index)),
 	 _ => fail!(~"Tried to index a non-table"),
        },
 
     ISetTable(tbl, index, value) => match reg[tbl] {
-        LTable(table, _) => { table.insert(reg_l(index), reg_l(value)); },
+        LTable(table, _) => { table.insert(reg_k(index), reg_k(value)); },
 	// Note: need to handle meta-tables here
 	_ => fail!(~"Tried to insert a value into a non-table!")
       },
 
+    ISelf(dst, tbl, method) => {
+      reg[dst+1] = reg[tbl];
+      match reg[tbl] {
+        LTable(table, _) => reg[dst] = *table.get(&reg_k(method)),
+	_ => fail!(~"Expecting a table for method call!")
+      }
+    }
 
     IJmp(offset) => jump(offset - 1),
-    ILt(r1, r2) => if reg_l(r1) < reg_l(r2) {;} else { bump(); },
 
     IForPrep(index, offset) => { reg[index] = reg[index] - reg[index+2]; jump(offset); },
     IForLoop(index, offset) => { reg[index] = reg[index] + reg[index+2];
