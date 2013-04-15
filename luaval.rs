@@ -1,5 +1,3 @@
-pub mod luaval {
-
 use core::ops::*;
 
 enum A {
@@ -20,4 +18,4 @@ impl Eq for A {
 }
 
 
-}
+fn main() {}
