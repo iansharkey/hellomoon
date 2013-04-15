@@ -4,8 +4,19 @@ extern mod luaval;
 use core::hashmap::linear;
 use core::ops::*;
 use core::vec::*;
+use core::str;
 
 use luaval::luaval::*;
+
+
+fn lprint(reg: &mut ~[LuaVal]) -> ~[LuaVal] { 
+
+   let strs = map(*reg, |v| { v.to_str() });
+   let s = str::connect(strs, ~"\t");
+   io::println(s);
+   return ~[];
+}
+
 
 
 fn run( execution: &Execution, regs: &mut ~[LuaVal] ) -> ~[LuaVal] {
@@ -126,10 +137,6 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal],
   }
 }
 
-fn c(reg: &mut ~[LuaVal]) -> ~[LuaVal] { 
-    io::println(fmt!("somthing cooler (global): %s", reg[0].to_str()));
-    return ~[LNum(44f)];
-}
 
 
 
@@ -143,22 +150,24 @@ fn main() {
 
  hmap.insert( LString(@~"a"), LNum(56f) );
 
-
+/*
  let subprog = Execution { globals: globals, state: @mut true, constants: ~[LNum(70f), LTable(@mut hmap, @[]), LString(@~"a")], prog: Program(~[
   ILoadNil(0, 55),
   ILoadK(1, 1),
   IGetTable(2, 1, -3),
   IReturn(2, 2)
  ]) };
+*/
 
- globals.insert(LString(@~"foo"), LRustFunc(c));
+ globals.insert(LString(@~"print"), LRustFunc(lprint));
 
- let s = ~Execution { globals: globals, state: @mut true, constants: ~[LNum(500f), LNum(300f), LString(@~"foo")], prog: Program(~[
+ let s = ~Execution { globals: globals, state: @mut true, constants: ~[LNum(500f), LNum(300f), LString(@~"print")], prog: Program(~[
      IGetGlobal(1, 2),
      ILoadK(2, 0),
-     ICall(1, 2, 2),
-//     ILoadK(1, 0),
-     IAdd(3,1,-2), 
+     ILoadK(3, 1),
+     ICall(1, 3, 1),
+     ILoadK(1, 0),
+     IAdd(3,1,-1), 
      ISub(3,3,2),
      IReturn(3, 2),
     ]) };
