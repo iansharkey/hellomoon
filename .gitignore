@@ -36,4 +36,8 @@
 Icon?
 ehthumbs.db
 Thumbs.db
-.rs~
+*~
+*dSYM/
+*.dylib
+
+lua
