@@ -10,10 +10,9 @@ use luaval::luaval::*;
 
 
 fn lprint(reg: &mut ~[LuaVal]) -> ~[LuaVal] { 
-
    let strs = map(*reg, |v| { v.to_str() });
-   let s = str::connect(strs, ~"\t");
-   io::println(s);
+   let line = str::connect(strs, ~"\t");
+   io::println(line);
    return ~[];
 }
 
@@ -76,6 +75,12 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal],
 	_ => fail!(~"Attempt to perform arithmetic on a non-number value!")
       },
 
+    ILen(dst, src) => reg[dst] = match reg[src] {
+      LString(x) => LNum(x.len() as float),
+      // TODO: need to handle tables and metatables
+      _ => fail!(~"Not a string!"),
+    },
+
     ILoadK(dst, src) => reg[dst] = constants[src],
     ILoadNil(start, end) => { grow(reg, end, &LNil); for uint::range(start, end) |i| { reg[i] = LNil; }; }
     IMove(r1, r2) => reg[r1] = reg_k(r2),
@@ -85,6 +90,8 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal],
     IGetGlobal(dst, k) => reg[dst] = *globals.get(&constants[k]),
     ISetGlobal(src, k) => {globals.insert(constants[k], reg[src]); },
 
+
+    INewTable(dst, size_vec, size_map) => reg[dst] = LTable(@mut linear::LinearMap::new(), @[]),
     IGetTable(dst, tbl, index) => match reg[tbl] {
          LTable(table, _) => reg[dst] = *table.get(&reg_k(index)),
 	 _ => fail!(~"Tried to index a non-table"),
@@ -164,7 +171,8 @@ fn main() {
  let s = ~Execution { globals: globals, state: @mut true, constants: ~[LNum(500f), LNum(300f), LString(@~"print")], prog: Program(~[
      IGetGlobal(1, 2),
      ILoadK(2, 0),
-     ILoadK(3, 1),
+     ILoadK(3, 2),
+     ILen(3, 3),
      ICall(1, 3, 1),
      ILoadK(1, 0),
      IAdd(3,1,-1), 

@@ -50,8 +50,8 @@ pub enum Instr {
 // IClosure(int, int),
 // IClose(int),
 
-// ILen(int, int)
-// INewTable(int, int, int),
+ ILen(int, int),
+ INewTable(int, int, int),
 // ISetList(int, int, int),
  IGetTable(int, int, int),
  ISetTable(int, int, int),
@@ -65,9 +65,6 @@ pub enum Instr {
 
 
 
-#[deriving(Eq)]
-pub struct Program(~[Instr]);
-
 
 #[deriving(Eq)]
 pub struct Execution {
@@ -78,12 +75,17 @@ pub struct Execution {
 }
 
 
+
+#[deriving(Eq)]
+pub struct Program(~[Instr]);
+
+
 //#[deriving(Eq)]
 enum LuaVal {
+ LTable(@mut linear::LinearMap<LuaVal, LuaVal>, @ [LuaVal]),
  LString(@~str),
  LNum(float),
  LBool(bool),
- LTable(@mut linear::LinearMap<LuaVal, LuaVal>, @[LuaVal]),
  LFunc(@Execution),
  LRustFunc(extern "Rust" fn(reg: &mut ~[LuaVal]) -> ~[LuaVal] ),
  LNil,
