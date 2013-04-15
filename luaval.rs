@@ -82,7 +82,7 @@ pub struct Program(~[Instr]);
 
 //#[deriving(Eq)]
 enum LuaVal {
- LTable(@mut linear::LinearMap<LuaVal, LuaVal>, @ [LuaVal]),
+ LTable(@mut linear::LinearMap<LuaVal, LuaVal>, @mut [LuaVal]),
  LString(@~str),
  LNum(float),
  LBool(bool),
