@@ -1,5 +1,3 @@
-use core::ops::*;
-
 enum A {
  L(@mut [A]),
 }
