@@ -17,6 +17,35 @@ fn lprint(reg: &mut ~[LuaVal]) -> ~[LuaVal] {
 }
 
 
+fn list_get(reg: &mut ~[LuaVal]) -> ~[LuaVal] {
+  
+  let table =  match reg[0] {
+    LTable(table, _) => table,
+    _ => fail!(~"ipairs: Expecting a table in arg 1!"),
+  };
+
+  let index = match reg[1] {
+    LNum(v) => v,
+    _ => fail!(~"ipairs: Expecting a table arg 2!"),
+  };
+
+
+  let lua_index = LNum(index+1f);
+  if table.contains_key(&lua_index) {  
+    let retvals = ~[lua_index, *table.get(&lua_index ) ];
+    //io::println(retvals.to_str());
+
+    return retvals;
+  }
+
+  return ~[LNil, LNil];
+}
+
+fn ipairs(reg: &mut ~[LuaVal]) -> ~[LuaVal] {
+   let table = reg[0];
+   return ~[LRustFunc(list_get), table, LNum(0f) ];
+}
+
 
 fn run( execution: &Execution, regs: &mut ~[LuaVal] ) -> ~[LuaVal] {
  let mut pc = 0;
@@ -91,7 +120,7 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal],
     ISetGlobal(src, k) => {globals.insert(constants[k], reg[src]); },
 
 
-    INewTable(dst, size_vec, size_map) => reg[dst] = LTable(@mut linear::LinearMap::new(), @[]),
+    INewTable(dst, _, _) => reg[dst] = LTable(@mut linear::LinearMap::new(), @[]),
     IGetTable(dst, tbl, index) => match reg[tbl] {
          LTable(table, _) => reg[dst] = *table.get(&reg_k(index)),
 	 _ => fail!(~"Tried to index a non-table"),
@@ -111,7 +140,7 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal],
       }
     }
 
-    IJmp(offset) => jump(offset - 1),
+    IJmp(offset) => jump(offset),
 
     IForPrep(index, offset) => { reg[index] = reg[index] - reg[index+2]; jump(offset); },
     IForLoop(index, offset) => { reg[index] = reg[index] + reg[index+2];
@@ -123,15 +152,35 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal],
 				   if reg[index] >= reg[index+1] { action(); }
 				 }
 			       }
+    ITForLoop(func, c) => {
+      //io::println("gothere in tforloop");
+      let mut args = ~[ reg[func+1], reg[func+2] ];
+      let ret_regs = match reg[func] {
+          LFunc(subexec) => run( subexec, &mut args),
+	  LRustFunc(f) =>  f(&mut args),
+          _ => fail!(~"Tried to call a non-function!"),
+	};
+      for int::range(0, c) |i| { reg[func+3+i] = ret_regs[i]; };
+      if reg[func+3] != LNil {
+        reg[func+2] = reg[func+3];
+      }
+      else {
+        bump();
+      }
+    }
     
 
     ICall(func, call_extent, ret_extent) =>  {
     	let mut reg_prime = from_fn( (call_extent-1) as uint, |i| { reg[func+1+i as int] }); 
+
+	//io::println(fmt!("calling %s", reg[func].to_str()));
 	let ret_regs = match reg[func] {
           LFunc(subexec) => run( subexec, &mut reg_prime),
 	  LRustFunc(f) =>  f(&mut reg_prime),
           _ => fail!(~"Tried to call a non-function!"),
 	};
+
+	//io::println(fmt!("got %d items, expecting %d, first: %s", ret_regs.len() as int, ret_extent-2+1, ret_regs[0].to_str()));	
 	match ret_extent as uint {
 	    0 => return, // TODO: take all return values
 	    1 => return,
@@ -155,7 +204,9 @@ fn main() {
  
  let mut hmap: linear::LinearMap<LuaVal, LuaVal> = linear::LinearMap::new();
 
- hmap.insert( LString(@~"a"), LNum(56f) );
+ hmap.insert( LNum(1f), LNum(56f) );
+ hmap.insert( LNum(2f), LNum(57f) );
+ hmap.insert( LNum(3f), LNum(58f) );
 
 /*
  let subprog = Execution { globals: globals, state: @mut true, constants: ~[LNum(70f), LTable(@mut hmap, @[]), LString(@~"a")], prog: Program(~[
@@ -167,7 +218,27 @@ fn main() {
 */
 
  globals.insert(LString(@~"print"), LRustFunc(lprint));
+ globals.insert(LString(@~"ipairs"), LRustFunc(ipairs));
 
+  let s = ~Execution { globals: globals, state: @mut true, constants: ~[
+      	LTable(@mut hmap, @[]), LString(@~"print"), LString(@~"ipairs"), ], prog: Program(~[
+//    IGetGlobal(0, 1),
+//    ILoadK(1, 2),
+//    ICall(0, 2, 1),
+    IGetGlobal(0, 2),
+    ILoadK(1, 0),
+    ICall(0, 2, 4),
+    IJmp(4),
+    IGetGlobal(5, 1),
+    IMove(6, 3),
+    IMove(7, 4),
+    ICall(5, 3, 1),
+    ITForLoop(0, 2),
+    IJmp(-6),
+    IReturn(0, 1),
+  ]) };
+
+/*
  let s = ~Execution { globals: globals, state: @mut true, constants: ~[LNum(500f), LNum(300f), LString(@~"print")], prog: Program(~[
      IGetGlobal(1, 2),
      ILoadK(2, 0),
@@ -179,7 +250,7 @@ fn main() {
      ISub(3,3,2),
      IReturn(3, 2),
     ]) };
-/*
+
  let fancy = ~Execution { globals: globals, state: @mut true, constants: ~[LNum(0f), LNum(1f), LNum(100f)], prog: Program(~[
    ILoadK(0, 0),
    ILoadK(1, 1),
@@ -204,7 +275,7 @@ fn main() {
 
 
 
- let mut regs = ~[LNum(5050f), LNum(0f),LNum(111f),LNum(0f), LNum(0f),];
+ let mut regs = ~[LNum(5050f), LNum(0f),LNum(111f),LNum(0f), LNum(0f),LNum(0f), LNum(0f), LNum(0f),];
  let out = run(s, &mut regs );
  io::println( out.to_str() );
 

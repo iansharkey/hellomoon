@@ -59,7 +59,7 @@ pub enum Instr {
 
  IForPrep(int, int),
  IForLoop(int, int),
-// ITForLoop(int, int)
+ ITForLoop(int, int)
 
 }
 
@@ -215,7 +215,8 @@ impl ToStr for LuaVal {
    LNil => ~"nil",
    LRustFunc(_) => ~"Rust function",
    LFunc(_) => ~"Lua function",
-   _ => ~"something else",
+   LTable(_, _) => ~"Lua table",
+   LBool(b) => b.to_str(),
   }
  }
 }
