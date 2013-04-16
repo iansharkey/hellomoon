@@ -18,8 +18,7 @@ fn lprint(reg: &mut ~[LuaVal]) -> ~[LuaVal] {
 
 
 fn list_get(reg: &mut ~[LuaVal]) -> ~[LuaVal] {
-  
-  let table =  match reg[0] {
+  let table = match reg[0] {
     LTable(table, _) => table,
     _ => fail!(~"ipairs: Expecting a table in arg 1!"),
   };
@@ -29,13 +28,9 @@ fn list_get(reg: &mut ~[LuaVal]) -> ~[LuaVal] {
     _ => fail!(~"ipairs: Expecting a table arg 2!"),
   };
 
-
   let lua_index = LNum(index+1f);
   if table.contains_key(&lua_index) {  
-    let retvals = ~[lua_index, *table.get(&lua_index ) ];
-    //io::println(retvals.to_str());
-
-    return retvals;
+    return ~[lua_index, *table.get(&lua_index ) ];
   }
 
   return ~[LNil, LNil];
