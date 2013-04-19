@@ -9,6 +9,19 @@ use core::str;
 use luaval::luaval::*;
 
 
+fn ltype(reg: &mut ~[LuaVal]) -> ~[LuaVal] {
+  return ~[ LString(@match reg[0] {
+    LString(_) => ~"string",
+    LNum(_) => ~"number",
+    LBool(_) => ~"boolean",
+    LTable(_, _) => ~"table",
+    LFunc(_) => ~"function",
+    LRustFunc(_) => ~"function",
+    LNil => ~"nil",
+  })
+  ]
+}
+
 fn lprint(reg: &mut ~[LuaVal]) -> ~[LuaVal] { 
    let strs = map(*reg, |v| { v.to_str() });
    let line = str::connect(strs, ~"\t");
@@ -117,7 +130,10 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal],
 
     INewTable(dst, _, _) => reg[dst] = LTable(@mut linear::LinearMap::new(), @[]),
     IGetTable(dst, tbl, index) => match reg[tbl] {
-         LTable(table, _) => reg[dst] = *table.get(&reg_k(index)),
+         LTable(table, _) => reg[dst] = match table.find(&reg_k(index)) {
+	    Some(v) => *v,
+	    None => LNil,
+	   },
 	 _ => fail!(~"Tried to index a non-table"),
        },
 
@@ -214,12 +230,20 @@ fn main() {
 
  globals.insert(LString(@~"print"), LRustFunc(lprint));
  globals.insert(LString(@~"ipairs"), LRustFunc(ipairs));
+ globals.insert(LString(@~"type"), LRustFunc(ltype));
 
   let s = ~Execution { globals: globals, state: @mut true, constants: ~[
-      	LTable(@mut hmap, @[]), LString(@~"print"), LString(@~"ipairs"), ], prog: Program(~[
-//    IGetGlobal(0, 1),
-//    ILoadK(1, 2),
-//    ICall(0, 2, 1),
+      	LTable(@mut hmap, @[]), LString(@~"print"), LString(@~"ipairs"), LString(@~"type"), LNil ], prog: Program(~[
+
+    IGetGlobal(0, 3),
+    IGetGlobal(1, 4),
+    ICall(0, 2, 2),
+
+    IMove(1, 0),
+
+    IGetGlobal(0, 1),
+    ICall(0, 2, 1),
+
     IGetGlobal(0, 2),
     ILoadK(1, 0),
     ICall(0, 2, 4),
