@@ -124,7 +124,10 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal],
     ILoadBool(dst, b, c) => { reg[dst] = LBool(num_to_bool(b)); if num_to_bool(c) { bump(); } },
 
 
-    IGetGlobal(dst, k) => reg[dst] = *globals.get(&constants[k]),
+    IGetGlobal(dst, k) => reg[dst] = match globals.find(&constants[k]) {
+      Some(v) => *v,
+      None => LNil,
+    },
     ISetGlobal(src, k) => {globals.insert(constants[k], reg[src]); },
 
 
