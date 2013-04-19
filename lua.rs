@@ -5,9 +5,32 @@ use core::hashmap::linear;
 use core::ops::*;
 use core::vec::*;
 use core::str;
+use core::task::try;
 
 use luaval::luaval::*;
 
+
+
+/*
+fn lpcall(reg: &mut ~[LuaVal]) -> ~[LuaVal] {
+   let luafunc = reg.remove(0);
+
+    match luafunc {
+          LFunc(subexec) => {
+	    let owned_subexec = subexec.clone();
+	    do try {
+	       run(owned_subexec, reg);
+	    }
+	  }
+
+
+          _ => fail!(~"Tried to call a non-function!"),
+     };
+
+
+  return ~[];
+}
+*/
 
 fn ltype(reg: &mut ~[LuaVal]) -> ~[LuaVal] {
   return ~[ LString(@match reg[0] {
