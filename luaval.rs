@@ -68,10 +68,10 @@ pub enum Instr {
 
 #[deriving(Eq)]
 pub struct Execution {
-  state: @mut bool,
+  state: bool,
   constants: ~[LuaVal],
   prog: Program,
-  globals: @mut linear::LinearMap<LuaVal, LuaVal>,
+  globals: ~linear::LinearMap<LuaVal, LuaVal>,
 }
 
 
@@ -86,7 +86,7 @@ enum LuaVal {
  LString(@~str),
  LNum(float),
  LBool(bool),
- LFunc(@Execution),
+ LFunc(Execution),
  LRustFunc(extern "Rust" fn(reg: &mut ~[LuaVal]) -> ~[LuaVal] ),
  LNil,
 }

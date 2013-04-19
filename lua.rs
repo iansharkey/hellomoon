@@ -17,17 +17,17 @@ fn lpcall(reg: &mut ~[LuaVal]) -> ~[LuaVal] {
 
     match luafunc {
           LFunc(subexec) => {
-	    let owned_subexec = subexec.clone();
+              let owned_subexec = ~(copy *subexec);
 	    do try {
-	       run(owned_subexec, reg);
+
+	      let mut params = ~[];
+	       run(owned_subexec, &mut params);
 	    }
 	  }
 
 
           _ => fail!(~"Tried to call a non-function!"),
      };
-
-
   return ~[];
 }
 */
@@ -64,9 +64,9 @@ fn list_get(reg: &mut ~[LuaVal]) -> ~[LuaVal] {
     _ => fail!(~"ipairs: Expecting a table arg 2!"),
   };
 
-  let lua_index = LNum(index+1f);
+  let mut lua_index = LNum(index+1f);
   if table.contains_key(&lua_index) {  
-    return ~[lua_index, *table.get(&lua_index ) ];
+    return ~[copy lua_index, table.get(&lua_index ) ];
   }
 
   return ~[LNil, LNil];
@@ -86,9 +86,9 @@ fn run( execution: &Execution, regs: &mut ~[LuaVal] ) -> ~[LuaVal] {
  loop {
    match execution_prime.prog[pc] {
     IReturn(src, extent) => return from_fn( (extent-1) as uint, |i| { regs_prime[src+i as int] }),
-    ITailCall(func, extent, _) => match regs_prime[func] {
+    ITailCall(func, extent, _) => match copy regs_prime[func] {
       LFunc(f_execution) => {
-        execution_prime = copy(*f_execution);
+        execution_prime = f_execution;
     	regs_prime = from_fn( (extent-1) as uint, |i| { regs_prime[func+1+i as int] }); 	
 	pc = 0;
       }
@@ -118,7 +118,7 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal],
     ILe(check, t1, t2) => if (reg_k(t1) <= reg_k(t2)) != num_to_bool(check)  { bump(); },
 
     ITest(r, c) => if !(lval_to_bool(reg[r]) != num_to_bool(c)) { bump(); },
-    ITestSet(dst, r, c) => if (lval_to_bool(reg[r]) != num_to_bool(c)) { reg[dst] = reg[r]; } else { bump(); },
+    ITestSet(dst, r, c) => if (lval_to_bool(copy reg[r]) != num_to_bool(c)) { reg[dst] = copy reg[r]; } else { bump(); },
 
     IAdd(dst, r1, r2) => reg[dst] = reg_k(r1) + reg_k(r2),
     ISub(dst, r1, r2) => reg[dst] = reg_k(r1) - reg_k(r2),
@@ -128,7 +128,7 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal],
     // TODO: this should operate over all the strings between r1 and r2
     IConcat(dst, r1, r2) => reg[dst] = LString(@(reg_k(r1).to_str() + reg_k(r2).to_str())),
 
-    INot(dst, src) =>  reg[dst] = LBool(!lval_to_bool(reg[src])),
+    INot(dst, src) =>  reg[dst] = LBool(!lval_to_bool(copy reg[src])),
 
     IUnm(dst, src) => reg[src] = match reg[dst] {
         LNum(x) => LNum(-x),
@@ -170,7 +170,7 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal],
       },
 
     ISelf(dst, tbl, method) => {
-      reg[dst+1] = reg[tbl];
+      reg[dst+1] = copy reg[tbl];
       match reg[tbl] {
         LTable(table, _) => reg[dst] = *table.get(&reg_k(method)),
 	_ => fail!(~"Expecting a table for method call!")
@@ -201,15 +201,15 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal],
 			       }
     ITForLoop(func, c) => {
       //io::println("gothere in tforloop");
-      let mut args = ~[ reg[func+1], reg[func+2] ];
-      let ret_regs = match reg[func] {
-          LFunc(subexec) => run( subexec, &mut args),
+      let mut args = ~[ copy reg[func+1], copy reg[func+2] ];
+      let ret_regs = match copy reg[func] {
+          LFunc(subexec) => run( &subexec, &mut args),
 	  LRustFunc(f) =>  f(&mut args),
           _ => fail!(~"Tried to call a non-function!"),
 	};
-      for int::range(0, c) |i| { reg[func+3+i] = ret_regs[i]; };
+      for int::range(0, c) |i| { reg[func+3+i] = copy ret_regs[i]; };
       if reg[func+3] != LNil {
-        reg[func+2] = reg[func+3];
+        reg[func+2] = copy reg[func+3];
       }
       else {
         bump();
@@ -221,8 +221,8 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal],
     	let mut reg_prime = from_fn( (call_extent-1) as uint, |i| { reg[func+1+i as int] }); 
 
 	//io::println(fmt!("calling %s", reg[func].to_str()));
-	let ret_regs = match reg[func] {
-          LFunc(subexec) => run( subexec, &mut reg_prime),
+	let ret_regs = match copy reg[func] {
+          LFunc(subexec) => run( &subexec, &mut reg_prime),
 	  LRustFunc(f) =>  f(&mut reg_prime),
           _ => fail!(~"Tried to call a non-function!"),
 	};
@@ -231,7 +231,7 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal],
 	match ret_extent as uint {
 	    0 => return, // TODO: take all return values
 	    1 => return,
-	    _ => for int::range(0, ret_extent-2+1) |i| { reg[func+i] = ret_regs[i]; },
+	    _ => for int::range(0, ret_extent-2+1) |i| { reg[func+i] = copy ret_regs[i]; },
 	}
     },
     IReturn(_, _) => { /* can't get here */ },
@@ -247,7 +247,7 @@ fn main() {
 
    // let registers = @mut [LNum(0.0f), LNum(3.0f), LNum(1.0f), LNum(2.0f)];
 
- let globals = @mut linear::LinearMap::new();
+ let mut globals = ~linear::LinearMap::new();
  
  let mut hmap: linear::LinearMap<LuaVal, LuaVal> = linear::LinearMap::new();
 
@@ -268,7 +268,7 @@ fn main() {
  globals.insert(LString(@~"ipairs"), LRustFunc(ipairs));
  globals.insert(LString(@~"type"), LRustFunc(ltype));
 
-  let s = ~Execution { globals: globals, state: @mut true, constants: ~[
+  let mut s = ~Execution { globals: globals, state: true, constants: ~[
       	LTable(@mut hmap, @[]), LString(@~"print"), LString(@~"ipairs"), LString(@~"type"), LNil ], prog: Program(~[
 
     INewTable(0, 0, 0),
