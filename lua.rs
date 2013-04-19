@@ -154,6 +154,16 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal],
       }
     }
 
+    ISetList(tbl, num, block) => {
+      match reg[tbl] {
+        LTable(hmap, _) =>  for int::range(0, num) |i| {
+	          hmap.insert(LNum(((block-1)*50+i) as float), reg[tbl+i]);
+      		},
+	_ => fail!(~"Expecting a table to set values!"), 
+      }
+
+    },
+
     IJmp(offset) => jump(offset),
 
     IForPrep(index, offset) => { reg[index] = reg[index] - reg[index+2]; jump(offset); },
@@ -237,6 +247,15 @@ fn main() {
 
   let s = ~Execution { globals: globals, state: @mut true, constants: ~[
       	LTable(@mut hmap, @[]), LString(@~"print"), LString(@~"ipairs"), LString(@~"type"), LNil ], prog: Program(~[
+
+    INewTable(0, 0, 0),
+    ILoadK(1, 1),
+    ILoadK(2, 2),
+    ILoadK(3, 3),
+    ILoadK(4, 4),
+    ISetList(0, 4, 1),
+    
+
 
     IGetGlobal(0, 3),
     IGetGlobal(1, 4),

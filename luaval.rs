@@ -52,7 +52,7 @@ pub enum Instr {
 
  ILen(int, int),
  INewTable(int, int, int),
-// ISetList(int, int, int),
+ ISetList(int, int, int),
  IGetTable(int, int, int),
  ISetTable(int, int, int),
  ISelf(int, int, int),
