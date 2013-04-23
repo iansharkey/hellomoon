@@ -82,8 +82,8 @@ pub struct Program(~[Instr]);
 
 //#[deriving(Eq)]
 enum LuaVal {
- LTable(@mut linear::LinearMap<LuaVal, LuaVal>, @ [LuaVal]),
- LString(@~str),
+ LTable(linear::LinearMap<LuaVal, LuaVal>, ~[LuaVal]),
+ LString(~str),
  LNum(float),
  LBool(bool),
  LFunc(Execution),
@@ -102,9 +102,9 @@ impl Eq for LuaVal {
   fn eq(&self, other: &LuaVal) -> bool {
     match (self, other) {
       (&LNum(x), &LNum(y)) => x == y,
-      (&LString(x), &LString(y)) => x == y,
+      (&LString(ref x), &LString(ref y)) => x == y,
       (&LBool(x), &LBool(y)) => x == y,
-      (&LTable(x, x1), &LTable(y, y1)) => (x == y) && (x1 == y1),
+      (&LTable(ref x, ref x1), &LTable(ref y, ref y1)) => (x == y) && (x1 == y1),
       (&LNil, &LNil) => true,
       (&LRustFunc(x), &LRustFunc(y)) => { cmp_fn(x, y) }
       (_, _) => false
@@ -119,11 +119,11 @@ impl Eq for LuaVal {
 
 impl IterBytes for LuaVal {
   fn iter_bytes(&self, lsb0: bool, f: Cb) {
-    match *self {
-      LString(x) => x.iter_bytes(lsb0, f),
-      LNum(x) => (x as uint).iter_bytes(lsb0, f),
-      LBool(x) => x.iter_bytes(lsb0, f),
-      LNil => (true, false).iter_bytes(lsb0, f),
+    match self {
+      &LString(ref x) => x.iter_bytes(lsb0, f),
+      &LNum(x) => (x as uint).iter_bytes(lsb0, f),
+      &LBool(x) => x.iter_bytes(lsb0, f),
+      &LNil => (true, false).iter_bytes(lsb0, f),
       _ => fail!(~"Tried to hash a function!"),
      }
   }
@@ -134,7 +134,7 @@ impl Add<LuaVal, LuaVal> for LuaVal {
  fn add(&self, other: &LuaVal) -> LuaVal {
   match (self, other) {
    (&LNum(x), &LNum(y)) => LNum(x+y),
-   (&LString(x), &LString(y)) => LString(@(x.to_owned() + y.to_owned()) ),
+   (&LString(ref x), &LString(ref y)) => LString((x.to_owned() + y.to_owned()) ),
    _ => LNil,
   }
 
@@ -174,7 +174,7 @@ impl Ord for LuaVal {
  fn lt(&self, other: &LuaVal) -> bool {
   match (self, other) {
    (&LNum(x), &LNum(y)) => x < y,
-   (&LString(x), &LString(y)) => x < y,
+   (&LString(ref x), &LString(ref y)) => x < y,
    _ => false,
   }
  }
@@ -182,7 +182,7 @@ impl Ord for LuaVal {
  fn le(&self, other: &LuaVal) -> bool {
   match (self, other) {
    (&LNum(x), &LNum(y)) => x <= y,
-   (&LString(x), &LString(y)) => x.to_owned() <= y.to_owned(),
+   (&LString(ref x), &LString(ref y)) => x.to_owned() <= y.to_owned(),
    _ => false,
   }
  }
@@ -191,7 +191,7 @@ impl Ord for LuaVal {
  fn ge(&self, other: &LuaVal) -> bool {
   match (self, other) {
    (&LNum(x), &LNum(y)) => x >= y,
-   (&LString(x), &LString(y)) => x.to_owned() >= y.to_owned(),
+   (&LString(ref x), &LString(ref y)) => x.to_owned() >= y.to_owned(),
    _ => false,
   }
 
@@ -200,7 +200,7 @@ impl Ord for LuaVal {
  fn gt(&self, other: &LuaVal) -> bool {
   match (self, other) {
    (&LNum(x), &LNum(y)) => x > y,
-   (&LString(x), &LString(y)) => x.to_owned() > y.to_owned(),
+   (&LString(ref x), &LString(ref y)) => x.to_owned() > y.to_owned(),
    _ => false,
   }
  }
@@ -209,14 +209,14 @@ impl Ord for LuaVal {
 
 impl ToStr for LuaVal {
  fn to_str(&self) -> ~str { 
-  match *self {
-   LNum(x) => x.to_str(),
-   LString(s) => s.to_owned(),
-   LNil => ~"nil",
-   LRustFunc(_) => ~"Rust function",
-   LFunc(_) => ~"Lua function",
-   LTable(_, _) => ~"Lua table",
-   LBool(b) => b.to_str(),
+  match self {
+   &LNum(x) => x.to_str(),
+   &LString(ref s) => s.to_owned(),
+   &LNil => ~"nil",
+   &LRustFunc(_) => ~"Rust function",
+   &LFunc(_) => ~"Lua function",
+   &LTable(_, _) => ~"Lua table",
+   &LBool(b) => b.to_str(),
   }
  }
 }

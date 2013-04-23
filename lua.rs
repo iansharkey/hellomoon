@@ -4,8 +4,9 @@ extern mod luaval;
 use core::hashmap::linear;
 use core::ops::*;
 use core::vec::*;
-use core::str;
-use core::task::try;
+
+//use core::str;
+//use core::task::try;
 
 use luaval::luaval::*;
 
@@ -33,7 +34,7 @@ fn lpcall(reg: &mut ~[LuaVal]) -> ~[LuaVal] {
 */
 
 fn ltype(reg: &mut ~[LuaVal]) -> ~[LuaVal] {
-  return ~[ LString(@match reg[0] {
+  return ~[ LString(match reg[0] {
     LString(_) => ~"string",
     LNum(_) => ~"number",
     LBool(_) => ~"boolean",
@@ -45,6 +46,7 @@ fn ltype(reg: &mut ~[LuaVal]) -> ~[LuaVal] {
   ]
 }
 
+
 fn lprint(reg: &mut ~[LuaVal]) -> ~[LuaVal] { 
    let strs = map(*reg, |v| { v.to_str() });
    let line = str::connect(strs, ~"\t");
@@ -53,57 +55,69 @@ fn lprint(reg: &mut ~[LuaVal]) -> ~[LuaVal] {
 }
 
 
+
+
 fn list_get(reg: &mut ~[LuaVal]) -> ~[LuaVal] {
   let table = match reg[0] {
-    LTable(table, _) => table,
+    LTable(ref table, _) => copy table,
     _ => fail!(~"ipairs: Expecting a table in arg 1!"),
   };
 
-  let index = match reg[1] {
-    LNum(v) => v,
+  let index = match &reg[1] {
+    &LNum(v) => v,
     _ => fail!(~"ipairs: Expecting a table arg 2!"),
   };
 
   let mut lua_index = LNum(index+1f);
   if table.contains_key(&lua_index) {  
-    return ~[copy lua_index, table.get(&lua_index ) ];
+    return ~[copy lua_index, copy *table.get(&lua_index ) ];
   }
 
   return ~[LNil, LNil];
 }
 
+
 fn ipairs(reg: &mut ~[LuaVal]) -> ~[LuaVal] {
-   let table = reg[0];
+   let table = copy reg[0];
    return ~[LRustFunc(list_get), table, LNum(0f) ];
 }
+
+
 
 
 fn run( execution: &Execution, regs: &mut ~[LuaVal] ) -> ~[LuaVal] {
  let mut pc = 0;
  let mut &execution_prime = &(*execution);
- let mut &regs_prime = regs;
+ let mut regs_prime = regs;
+// let mut empty_regs: &~[LuaVal] = &mut ~[];
 
  loop {
-   match execution_prime.prog[pc] {
-    IReturn(src, extent) => return from_fn( (extent-1) as uint, |i| { regs_prime[src+i as int] }),
+   match  execution_prime.prog[pc] {
+    IReturn(src, extent) => return from_fn( (extent-1) as uint, |i| { copy regs_prime[src+i as int] }),
     ITailCall(func, extent, _) => match copy regs_prime[func] {
-      LFunc(f_execution) => {
-        execution_prime = f_execution;
-    	regs_prime = from_fn( (extent-1) as uint, |i| { regs_prime[func+1+i as int] }); 	
+      LFunc(ref f_execution) => {
+        execution_prime = copy *f_execution;
+ 	
+	//grow_fn( regs_prime, (extent-1) as uint, |i: uint| { regs_prime[func+1+(i as int) ] }); 	
+	for uint::range(func as uint, 0) |i| {
+	  regs_prime.remove(i);
+	}
 	pc = 0;
       }
       _ => fail!(~"Cannot tail call to non-Lua function!")
-    },
-    _ => step(execution_prime.prog[pc], &mut pc, &mut regs_prime, &execution_prime.constants, execution_prime.globals)
+    }, 
+    _ => step(execution_prime.prog[pc], &mut pc, regs_prime, &execution_prime.constants, execution_prime.globals)
   }
  }
 }
+
+
 
 fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal], globals: &mut linear::LinearMap<LuaVal, LuaVal> ) {
 
  let jump = |n|  *pc+=n;
  let bump = || jump(1);;
- let reg_k = |r: int| if r<0 { constants[-r - 1] } else { reg[r] };
+ let reg_k = |r: int| if r<0 { copy constants[-r - 1] } else { copy reg[r] };
  let num_to_bool = |n:int| match n { 0 => false, _ => true };
  let lval_to_bool = |lval:LuaVal| match lval {
        LBool(x) => x,
@@ -117,7 +131,7 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal],
     ILt(check, t1, t2) => if (reg_k(t1) < reg_k(t2)) != num_to_bool(check)  { bump(); },
     ILe(check, t1, t2) => if (reg_k(t1) <= reg_k(t2)) != num_to_bool(check)  { bump(); },
 
-    ITest(r, c) => if !(lval_to_bool(reg[r]) != num_to_bool(c)) { bump(); },
+    ITest(r, c) => if !(lval_to_bool(copy reg[r]) != num_to_bool(c)) { bump(); },
     ITestSet(dst, r, c) => if (lval_to_bool(copy reg[r]) != num_to_bool(c)) { reg[dst] = copy reg[r]; } else { bump(); },
 
     IAdd(dst, r1, r2) => reg[dst] = reg_k(r1) + reg_k(r2),
@@ -126,7 +140,7 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal],
     IDiv(dst, r1, r2) => reg[dst] = reg_k(r1) / reg_k(r2),
 
     // TODO: this should operate over all the strings between r1 and r2
-    IConcat(dst, r1, r2) => reg[dst] = LString(@(reg_k(r1).to_str() + reg_k(r2).to_str())),
+    IConcat(dst, r1, r2) => reg[dst] = LString((reg_k(r1).to_str() + reg_k(r2).to_str())),
 
     INot(dst, src) =>  reg[dst] = LBool(!lval_to_bool(copy reg[src])),
 
@@ -135,63 +149,65 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal],
 	_ => fail!(~"Attempt to perform arithmetic on a non-number value!")
       },
 
-    ILen(dst, src) => reg[dst] = match reg[src] {
-      LString(x) => LNum(x.len() as float),
+    ILen(dst, src) => reg[dst] = match &reg[src] {
+      &LString(ref x) => LNum(x.len() as float),
       // TODO: need to handle tables and metatables
       _ => fail!(~"Not a string!"),
     },
 
-    ILoadK(dst, src) => reg[dst] = constants[src],
+    ILoadK(dst, src) => reg[dst] = copy constants[src],
     ILoadNil(start, end) => { grow(reg, end, &LNil); for uint::range(start, end) |i| { reg[i] = LNil; }; }
     IMove(r1, r2) => reg[r1] = reg_k(r2),
     ILoadBool(dst, b, c) => { reg[dst] = LBool(num_to_bool(b)); if num_to_bool(c) { bump(); } },
 
 
     IGetGlobal(dst, k) => reg[dst] = match globals.find(&constants[k]) {
-      Some(v) => *v,
+      Some(v) => copy *v,
       None => LNil,
     },
-    ISetGlobal(src, k) => {globals.insert(constants[k], reg[src]); },
+    ISetGlobal(src, k) => {globals.insert(copy constants[k], copy reg[src]); },
 
 
-    INewTable(dst, _, _) => reg[dst] = LTable(@mut linear::LinearMap::new(), @[]),
-    IGetTable(dst, tbl, index) => match reg[tbl] {
-         LTable(table, _) => reg[dst] = match table.find(&reg_k(index)) {
-	    Some(v) => *v,
+    INewTable(dst, _, _) => reg[dst] = LTable(linear::LinearMap::new(), ~[]),
+    IGetTable(dst, tbl, index) => match copy reg[tbl] {
+         LTable(ref table, _) => reg[dst] = match table.find(&reg_k(index)) {
+	    Some(v) => copy *v,
 	    None => LNil,
 	   },
 	 _ => fail!(~"Tried to index a non-table"),
        },
 
     ISetTable(tbl, index, value) => match reg[tbl] {
-        LTable(table, _) => { table.insert(reg_k(index), reg_k(value)); },
+        LTable(ref mut table, _) => { table.insert(reg_k(index), reg_k(value)); },
 	// Note: need to handle meta-tables here
 	_ => fail!(~"Tried to insert a value into a non-table!")
       },
 
+
     ISelf(dst, tbl, method) => {
       reg[dst+1] = copy reg[tbl];
-      match reg[tbl] {
-        LTable(table, _) => reg[dst] = *table.get(&reg_k(method)),
+      match copy reg[tbl] {
+        LTable(ref table, _) => reg[dst] = copy *table.get(&reg_k(method)),
 	_ => fail!(~"Expecting a table for method call!")
       }
     }
 
+
     ISetList(tbl, num, block) => {
       match reg[tbl] {
-        LTable(hmap, _) =>  for int::range(0, num) |i| {
-	          hmap.insert(LNum(((block-1)*50+i) as float), reg[tbl+i]);
+        LTable(ref mut hmap, _) =>  for int::range(0, num) |i| {
+	          hmap.insert(LNum(((block-1)*50+i) as float), copy reg[tbl+i]);
       		},
 	_ => fail!(~"Expecting a table to set values!"), 
       }
-
     },
 
     IJmp(offset) => jump(offset),
 
     IForPrep(index, offset) => { reg[index] = reg[index] - reg[index+2]; jump(offset); },
+
     IForLoop(index, offset) => { reg[index] = reg[index] + reg[index+2];
-    		    	         let action = ||  { jump(offset); reg[index+3] = reg[index]; };
+    		    	         let action = ||  { jump(offset); reg[index+3] = copy reg[index]; };
     		    	         if reg[index+2] > LNum(0f) { 
 				   if reg[index] <= reg[index+1] { action(); }
 				 }
@@ -199,6 +215,8 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal],
 				   if reg[index] >= reg[index+1] { action(); }
 				 }
 			       }
+
+
     ITForLoop(func, c) => {
       //io::println("gothere in tforloop");
       let mut args = ~[ copy reg[func+1], copy reg[func+2] ];
@@ -218,7 +236,7 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal],
     
 
     ICall(func, call_extent, ret_extent) =>  {
-    	let mut reg_prime = from_fn( (call_extent-1) as uint, |i| { reg[func+1+i as int] }); 
+    	let mut reg_prime = from_fn( (call_extent-1) as uint, |i| { copy reg[func+1+i as int] }); 
 
 	//io::println(fmt!("calling %s", reg[func].to_str()));
 	let ret_regs = match copy reg[func] {
@@ -234,9 +252,9 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal],
 	    _ => for int::range(0, ret_extent-2+1) |i| { reg[func+i] = copy ret_regs[i]; },
 	}
     },
+
     IReturn(_, _) => { /* can't get here */ },
     ITailCall(_, _, _) => { /* can't get here */ },
-
   }
 }
 
@@ -246,6 +264,7 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal],
 fn main() {
 
    // let registers = @mut [LNum(0.0f), LNum(3.0f), LNum(1.0f), LNum(2.0f)];
+
 
  let mut globals = ~linear::LinearMap::new();
  
@@ -264,12 +283,13 @@ fn main() {
  ]) };
 */
 
- globals.insert(LString(@~"print"), LRustFunc(lprint));
- globals.insert(LString(@~"ipairs"), LRustFunc(ipairs));
- globals.insert(LString(@~"type"), LRustFunc(ltype));
+ globals.insert(LString(~"print"), LRustFunc(lprint));
+ globals.insert(LString(~"ipairs"), LRustFunc(ipairs));
+ globals.insert(LString(~"type"), LRustFunc(ltype));
+
 
   let mut s = ~Execution { globals: globals, state: true, constants: ~[
-      	LTable(@mut hmap, @[]), LString(@~"print"), LString(@~"ipairs"), LString(@~"type"), LNil ], prog: Program(~[
+      	LTable(hmap, ~[]), LString(~"print"), LString(~"ipairs"), LString(~"type"), LNil ], prog: Program(~[
 
     INewTable(0, 0, 0),
     ILoadK(1, 1),
@@ -352,15 +372,15 @@ fn main_test() {
  let v2 = LNum(3.0f);
  let v3 = v1 + v2;
 
- let s1 = LString(@~"hello");
- let s2 = LString(@~" world");
+ let s1 = LString(~"hello");
+ let s2 = LString(~" world");
  let s3 = s1 + s2;
 
  io::println( (v2 < v1).to_str() );
  io::println( s3.to_str() );
  match v3 {
   LNum(x) => { io::println(fmt!("%f", x)); },
-  LString(s) => { io::println(*s); },
+  LString(s) => { io::println(s); },
   _ => { ; },
  }
 
