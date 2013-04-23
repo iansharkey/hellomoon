@@ -56,22 +56,26 @@ fn lprint(reg: &mut ~[LuaVal]) -> ~[LuaVal] {
 
 
 fn list_get(reg: &mut ~[LuaVal]) -> ~[LuaVal] {
-  let table = match reg[0] {
-    LTable(ref table, _) => copy table,
+  match reg[0] {
+    LTable(ref table, _) => {
+
+      let index = match &reg[1] {
+        &LNum(v) => v,
+        _ => fail!(~"ipairs: Expecting a table arg 2!"),
+      };
+
+      let mut lua_index = LNum(index+1f);
+      if table.contains_key(&lua_index) {  
+        return ~[copy lua_index, copy *table.get(&lua_index ) ];
+      }
+      return ~[LNil, LNil];
+
+    },
     _ => fail!(~"ipairs: Expecting a table in arg 1!"),
   };
 
-  let index = match &reg[1] {
-    &LNum(v) => v,
-    _ => fail!(~"ipairs: Expecting a table arg 2!"),
-  };
 
-  let mut lua_index = LNum(index+1f);
-  if table.contains_key(&lua_index) {  
-    return ~[copy lua_index, copy *table.get(&lua_index ) ];
-  }
 
-  return ~[LNil, LNil];
 }
 
 
@@ -92,7 +96,7 @@ fn run( execution: &Execution, regs: &mut ~[LuaVal] ) -> ~[LuaVal] {
  loop {
    match  execution_prime.prog[pc] {
     IReturn(src, extent) => return from_fn( (extent-1) as uint, |i| { copy regs_prime[src+i as int] }),
-    ITailCall(func, extent, _) => match copy regs_prime[func] {
+    ITailCall(func, _, _) => match copy regs_prime[func] {
       LFunc(ref f_execution) => {
         execution_prime = copy *f_execution;
  	
@@ -117,9 +121,9 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal],
  let bump = || jump(1);;
  let reg_k = |r: int| if r<0 { copy constants[-r - 1] } else { copy reg[r] };
  let num_to_bool = |n:int| match n { 0 => false, _ => true };
- let lval_to_bool = |lval:LuaVal| match lval {
-       LBool(x) => x,
-       LNil => false,
+ let lval_to_bool = |lval: &LuaVal| match lval {
+       &LBool(x) => x,
+       &LNil => false,
        _ => true,
     };
 
@@ -129,8 +133,8 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal],
     ILt(check, t1, t2) => if (reg_k(t1) < reg_k(t2)) != num_to_bool(check)  { bump(); },
     ILe(check, t1, t2) => if (reg_k(t1) <= reg_k(t2)) != num_to_bool(check)  { bump(); },
 
-    ITest(r, c) => if !(lval_to_bool(copy reg[r]) != num_to_bool(c)) { bump(); },
-    ITestSet(dst, r, c) => if (lval_to_bool(copy reg[r]) != num_to_bool(c)) { reg[dst] = copy reg[r]; } else { bump(); },
+    ITest(r, c) => if !(lval_to_bool(&reg[r]) != num_to_bool(c)) { bump(); },
+    ITestSet(dst, r, c) => if (lval_to_bool(&reg[r]) != num_to_bool(c)) { reg[dst] = copy reg[r]; } else { bump(); },
 
     IAdd(dst, r1, r2) => reg[dst] = reg_k(r1) + reg_k(r2),
     ISub(dst, r1, r2) => reg[dst] = reg_k(r1) - reg_k(r2),
@@ -140,7 +144,7 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal],
     // TODO: this should operate over all the strings between r1 and r2
     IConcat(dst, r1, r2) => reg[dst] = LString((reg_k(r1).to_str() + reg_k(r2).to_str())),
 
-    INot(dst, src) =>  reg[dst] = LBool(!lval_to_bool(copy reg[src])),
+    INot(dst, src) =>  reg[dst] = LBool(!lval_to_bool(&reg[src])),
 
     IUnm(dst, src) => reg[src] = match reg[dst] {
         LNum(x) => LNum(-x),
@@ -167,8 +171,8 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal],
 
 
     INewTable(dst, _, _) => reg[dst] = LTable(linear::LinearMap::new(), ~[]),
-    IGetTable(dst, tbl, index) => match copy reg[tbl] {
-         LTable(ref table, _) => reg[dst] = match table.find(&reg_k(index)) {
+    IGetTable(dst, tbl, index) => reg[dst] = match &reg[tbl] {
+         &LTable(ref table, _) => match table.find(&reg_k(index)) {
 	    Some(v) => copy *v,
 	    None => LNil,
 	   },
@@ -184,8 +188,8 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal],
 
     ISelf(dst, tbl, method) => {
       reg[dst+1] = copy reg[tbl];
-      match copy reg[tbl] {
-        LTable(ref table, _) => reg[dst] = copy *table.get(&reg_k(method)),
+      reg[dst] = match &reg[tbl] {
+        &LTable(ref table, _) => copy *table.get(&reg_k(method)),
 	_ => fail!(~"Expecting a table for method call!")
       }
     }
@@ -343,8 +347,8 @@ fn main() {
 
     IGetGlobal(0, 3),
     IGetGlobal(1, 4),
-//    ICall(0, 2, 2),
-    ICall(3, 2, 2),
+    ICall(0, 2, 2),
+//    ICall(3, 2, 2),  // <- this fails!
 
     IMove(1, 0),
 
