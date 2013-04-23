@@ -1,6 +1,7 @@
 
 extern mod luaval;
 
+use core::result::{unwrap, unwrap_err};
 use core::hashmap::linear;
 use core::ops::*;
 use core::vec::*;
@@ -18,10 +19,11 @@ fn lpcall(reg: &mut ~[LuaVal]) -> ~[LuaVal] {
 
     match luafunc {
           LFunc(subexec) => {
-	    do try {
+	    let res = do try {
 	      let mut params = ~[];
-	       run(&subexec, &mut params);
-	    }
+	      run(&subexec, &mut params)
+	    };
+	    io::println(unwrap(res).to_str());
 	  },
           _ => fail!(~"Tried to call a non-function!"),
      };
@@ -262,13 +264,6 @@ fn main() {
    // let registers = @mut [LNum(0.0f), LNum(3.0f), LNum(1.0f), LNum(2.0f)];
 
 
- let mut globals = ~linear::LinearMap::new();
- 
- let mut hmap: linear::LinearMap<LuaVal, LuaVal> = linear::LinearMap::new();
-
- hmap.insert( LNum(1f), LNum(56f) );
- hmap.insert( LNum(2f), LNum(57f) );
- hmap.insert( LNum(3f), LNum(58f) );
 
 /*
  let subprog = Execution { globals: globals, state: @mut true, constants: ~[LNum(70f), LTable(@mut hmap, @[]), LString(@~"a")], prog: Program(~[
@@ -279,44 +274,8 @@ fn main() {
  ]) };
 */
 
- globals.insert(LString(~"print"), LRustFunc(lprint));
- globals.insert(LString(~"ipairs"), LRustFunc(ipairs));
- globals.insert(LString(~"type"), LRustFunc(ltype));
 
 
-  let mut s = ~Execution { globals: globals, state: true, constants: ~[
-      	LTable(hmap, ~[]), LString(~"print"), LString(~"ipairs"), LString(~"type"), LNil ], prog: Program(~[
-
-    INewTable(0, 0, 0),
-    ILoadK(1, 1),
-    ILoadK(2, 2),
-    ILoadK(3, 3),
-    ILoadK(4, 4),
-    ISetList(0, 4, 1),
-    
-
-
-    IGetGlobal(0, 3),
-    IGetGlobal(1, 4),
-    ICall(0, 2, 2),
-
-    IMove(1, 0),
-
-    IGetGlobal(0, 1),
-    ICall(0, 2, 1),
-
-    IGetGlobal(0, 2),
-    ILoadK(1, 0),
-    ICall(0, 2, 4),
-    IJmp(4),
-    IGetGlobal(5, 1),
-    IMove(6, 3),
-    IMove(7, 4),
-    ICall(5, 3, 1),
-    ITForLoop(0, 2),
-    IJmp(-6),
-    IReturn(0, 1),
-  ]) };
 
 /*
  let s = ~Execution { globals: globals, state: @mut true, constants: ~[LNum(500f), LNum(300f), LString(@~"print")], prog: Program(~[
@@ -355,9 +314,65 @@ fn main() {
 
 
 
- let mut regs = ~[LNum(5050f), LNum(0f),LNum(111f),LNum(0f), LNum(0f),LNum(0f), LNum(0f), LNum(0f),];
- let out = run(s, &mut regs );
- io::println( out.to_str() );
+ let res = do try {
+ let mut globals = ~linear::LinearMap::new();
+ 
+ let mut hmap: linear::LinearMap<LuaVal, LuaVal> = linear::LinearMap::new();
+
+ hmap.insert( LNum(1f), LNum(56f) );
+ hmap.insert( LNum(2f), LNum(57f) );
+ hmap.insert( LNum(3f), LNum(58f) );
+
+
+ globals.insert(LString(~"print"), LRustFunc(lprint));
+ globals.insert(LString(~"ipairs"), LRustFunc(ipairs));
+ globals.insert(LString(~"type"), LRustFunc(ltype));
+
+
+  let mut s = ~Execution { globals: globals, state: true, constants: ~[
+      	LTable(hmap, ~[]), LString(~"print"), LString(~"ipairs"), LString(~"type"), LNil ], prog: Program(~[
+
+    INewTable(0, 0, 0),
+    ILoadK(1, 1),
+    ILoadK(2, 2),
+    ILoadK(3, 3),
+    ILoadK(4, 4),
+    ISetList(0, 4, 1),
+    
+
+
+    IGetGlobal(0, 3),
+    IGetGlobal(1, 4),
+//    ICall(0, 2, 2),
+    ICall(3, 2, 2),
+
+    IMove(1, 0),
+
+    IGetGlobal(0, 1),
+    ICall(0, 2, 1),
+
+    IGetGlobal(0, 2),
+    ILoadK(1, 0),
+    ICall(0, 2, 4),
+    IJmp(4),
+    IGetGlobal(5, 1),
+    IMove(6, 3),
+    IMove(7, 4),
+    ICall(5, 3, 1),
+    ITForLoop(0, 2),
+    IJmp(-6),
+    IReturn(0, 1),
+  ]) };
+
+
+   let mut regs = ~[LNum(5050f), LNum(0f),LNum(111f),LNum(0f), LNum(0f),LNum(0f), LNum(0f), LNum(0f),];
+   let out = run(s, &mut regs );
+   io::println( out.to_str() );
+   LNil
+ };
+
+ io::println(unwrap_err(res).to_str() + "test");
+
 
 }
 
