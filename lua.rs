@@ -222,9 +222,9 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal],
     ITForLoop(func, c) => {
       //io::println("gothere in tforloop");
       let mut args = ~[ copy reg[func+1], copy reg[func+2] ];
-      let ret_regs = match copy reg[func] {
-          LFunc(subexec) => run( &subexec, &mut args),
-	  LRustFunc(f) =>  f(&mut args),
+      let ret_regs = match &reg[func] {
+          &LFunc(ref subexec) => run( subexec, &mut args),
+	  &LRustFunc(f) =>  f(&mut args),
           _ => fail!(~"Tried to call a non-function!"),
 	};
       for int::range(0, c) |i| { reg[func+3+i] = copy ret_regs[i]; };
@@ -241,9 +241,9 @@ fn step( instr: Instr, pc: &mut int, reg: &mut ~[LuaVal], constants: &~[LuaVal],
     	let mut reg_prime = from_fn( (call_extent-1) as uint, |i| { copy reg[func+1+i as int] }); 
 
 	//io::println(fmt!("calling %s", reg[func].to_str()));
-	let ret_regs = match copy reg[func] {
-          LFunc(subexec) => run( &subexec, &mut reg_prime),
-	  LRustFunc(f) =>  f(&mut reg_prime),
+	let ret_regs = match &reg[func] {
+          &LFunc(ref subexec) => run( subexec, &mut reg_prime),
+	  &LRustFunc(f) =>  f(&mut reg_prime),
           _ => fail!(~"Tried to call a non-function!"),
 	};
 

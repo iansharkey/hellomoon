@@ -134,7 +134,7 @@ impl Add<LuaVal, LuaVal> for LuaVal {
  fn add(&self, other: &LuaVal) -> LuaVal {
   match (self, other) {
    (&LNum(x), &LNum(y)) => LNum(x+y),
-   (&LString(ref x), &LString(ref y)) => LString((x.to_owned() + y.to_owned()) ),
+   (&LString(ref x), &LString(ref y)) => LString(*x + *y),
    _ => LNil,
   }
 
